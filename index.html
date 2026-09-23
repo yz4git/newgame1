@@ -3,96 +3,97 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#060913" />
-    <meta name="description" content="移動の軌跡を描き、敵をタグ付けし、パルスで一掃する短編アーケードアクション。" />
+    <meta name="theme-color" content="#050b12" />
+    <meta name="description" content="夜間の列車運行を担当し、分岐器を直接タップして目的ホームへ導くリアルタイム配線パズル。" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg?v=__BUILD_ID__" />
     <link rel="manifest" href="./manifest.webmanifest?v=__BUILD_ID__" />
     <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__" />
-    <title>AFTERWAKE — Trace. Mark. Pulse.</title>
+    <title>MIDNIGHT JUNCTION — Route Before Arrival</title>
   </head>
   <body>
     <main id="app" class="app">
-      <canvas id="gameCanvas" aria-label="AFTERWAKE ゲーム画面"></canvas>
+      <canvas id="gameCanvas" aria-label="MIDNIGHT JUNCTION ゲーム画面。分岐器をタップして列車を目的ホームへ導きます。"></canvas>
 
-      <div class="hud" id="hud" hidden>
+      <div id="hud" class="hud" hidden>
         <div class="hud-top">
-          <section class="hud-card core-card" aria-label="コア耐久">
-            <span class="eyebrow">CORE INTEGRITY</span>
-            <div id="corePips" class="core-pips"></div>
+          <section class="hud-card" aria-label="運行信頼度">
+            <span class="eyebrow">SERVICE</span>
+            <div id="servicePips" class="service-pips"></div>
           </section>
 
-          <section class="sector-card">
-            <span id="sectorCount" class="eyebrow">SECTOR 01 / 05</span>
-            <strong id="sectorName">FIRST TRACE</strong>
-            <span id="sectorHint" class="sector-hint">軌跡に敵を触れさせる</span>
+          <section class="shift-card" aria-label="現在のシフト">
+            <span id="shiftNumber" class="eyebrow">SHIFT 01 / 05</span>
+            <strong id="shiftName">FIRST BOARD</strong>
+            <span id="shiftHint">分岐器をタップして目的ホームへ</span>
           </section>
 
           <section class="hud-card score-card" aria-label="スコア">
-            <span class="eyebrow">SCORE</span>
+            <span class="eyebrow">DISPATCH SCORE</span>
             <strong id="scoreValue">000000</strong>
-            <span id="chainValue" class="chain-readout">CHAIN ×1</span>
+            <span id="streakValue" class="streak">STREAK ×1</span>
           </section>
         </div>
 
-        <div class="hud-bottom">
-          <div class="move-hint" id="moveHint"><span class="hint-key">DRAG</span> 移動して軌跡を描く</div>
-          <div class="bottom-actions">
-            <button class="icon-button" id="soundButton" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
-            <button class="icon-button" id="pauseButton" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
-            <button class="pulse-button" id="pulseButton" type="button" aria-label="パルスを発動" disabled>
-              <span class="pulse-icon" aria-hidden="true">✦</span>
-              <span class="pulse-copy"><strong>PULSE</strong><small id="pulseState">MOVE TO CHARGE</small></span>
-              <span class="charge-track"><i id="chargeFill"></i></span>
-            </button>
-          </div>
+        <div class="progress-track" aria-hidden="true"><i id="progressFill"></i></div>
+
+        <div class="hud-actions">
+          <button id="soundButton" class="icon-button" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
+          <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
         </div>
+
+        <div class="control-hint"><b>TAP SWITCH</b> 列車が来る前に進路を組む</div>
+
+        <section class="queue-panel" aria-label="次に来る列車">
+          <div class="queue-label">NEXT TRAINS · IN → HOME</div>
+          <div id="nextQueue" class="next-queue"></div>
+        </section>
 
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <div class="joystick" id="joystick" aria-hidden="true"><i></i><b></b></div>
       </div>
 
-      <section class="screen title-screen" id="titleScreen">
-        <div class="title-topline"><span>FIELD TEST 04</span><span>ARCADE SYSTEMS / 2089</span></div>
+      <section id="titleScreen" class="screen title-screen">
+        <div class="title-topline"><span>01:47 · NIGHT OPERATIONS</span><span>CENTRAL SIGNAL BOX</span></div>
         <div class="title-content">
-          <div class="title-kicker"><i></i> A SIGNAL-BASED SURVIVAL GAME</div>
-          <h1>AFTER<span>WAKE</span></h1>
-          <p class="title-jp">軌跡を描け。敵を導け。光で断て。</p>
-          <p class="title-desc">移動した軌跡が、あなたの武器になる。<br />追跡者を軌跡に触れさせ、パルスで一掃しよう。</p>
-          <button id="startButton" class="primary-button" type="button"><span>作戦開始</span><i aria-hidden="true">↗</i></button>
-          <div class="control-summary"><span><b>DRAG</b> 移動して軌跡を描く</span><span><b>PULSE</b> タグ付けした敵を起爆</span></div>
+          <div class="title-kicker"><i aria-hidden="true"></i> REAL-TIME ROUTING PUZZLE</div>
+          <h1>MIDNIGHT <span>JUNCTION</span></h1>
+          <p class="title-jp">列車が来る前に、線路の未来を決める。</p>
+          <p class="title-desc">色付きの列車を同じ色のホームへ。<br />分岐器を直接タップし、到着順を読みながら夜明けまで運行をつなごう。</p>
+          <button id="startButton" class="primary-button" type="button"><span>夜間運行を開始</span><i aria-hidden="true">→</i></button>
+          <div class="control-summary">
+            <span><b>TAP</b> 分岐器を切り替える</span>
+            <span><b>READ</b> NEXTで次の列車を先読み</span>
+            <span><b>1–4</b> キーボード操作</span>
+          </div>
           <a class="fresh-link" href="./latest.html?v=__BUILD_ID__">更新が反映されない場合</a>
         </div>
-        <div class="title-bottomline"><span>5 SECTORS · ONE CORE · EVERY LINE MATTERS</span><span id="bestReadout">BEST —</span></div>
+        <div class="title-bottomline"><span>5 SHIFTS · 3 PLATFORMS · ONE SIGNAL BOX</span><span id="bestReadout">BEST —</span></div>
       </section>
 
-      <section class="screen pause-screen" id="pauseScreen" hidden>
+      <section id="pauseScreen" class="screen pause-screen" hidden>
         <div class="modal-panel">
-          <span class="eyebrow">SIGNAL PAUSED</span>
-          <h2>ひと息つこう。</h2>
-          <p>現在のセクターからすぐ再開できます。</p>
-          <button id="resumeButton" class="primary-button" type="button"><span>再開する</span><i aria-hidden="true">▶</i></button>
-          <button id="restartButton" class="text-button" type="button">最初からやり直す</button>
+          <span class="eyebrow">SIGNAL BOX PAUSED</span>
+          <h2>運行を保留中</h2>
+          <p>列車の位置は止まっています。再開すると同じ状態から続きます。</p>
+          <button id="resumeButton" class="primary-button" type="button"><span>運行を再開</span><i aria-hidden="true">▶</i></button>
+          <button id="restartButton" class="text-button" type="button">最初のシフトからやり直す</button>
         </div>
       </section>
 
-      <section class="screen result-screen" id="resultScreen" hidden>
+      <section id="resultScreen" class="screen result-screen" hidden>
         <div class="result-panel">
-          <span id="resultEyebrow" class="eyebrow">RUN COMPLETE</span>
-          <h2 id="resultTitle">CORE PRESERVED</h2>
-          <p id="resultSubtitle">信号はまだ続いている。</p>
+          <span id="resultEyebrow" class="eyebrow">DAWN SERVICE COMPLETE</span>
+          <h2 id="resultTitle">ALL LINES HOME</h2>
+          <p id="resultSubtitle">すべての列車を夜明けまでつないだ。</p>
           <div class="result-stats">
             <div><span>FINAL SCORE</span><strong id="resultScore">000000</strong></div>
-            <div><span>BEST CHAIN</span><strong id="resultChain">×0</strong></div>
-            <div><span>CORE LEFT</span><strong id="resultCore">3 / 3</strong></div>
+            <div><span>BEST STREAK</span><strong id="resultStreak">×0</strong></div>
+            <div><span>SHIFT</span><strong id="resultShift">5 / 5</strong></div>
           </div>
-          <p id="recordNotice" class="record-notice" hidden>NEW PERSONAL BEST</p>
-          <button id="againButton" class="primary-button" type="button"><span>もう一度挑戦</span><i aria-hidden="true">↻</i></button>
+          <p id="recordNotice" class="record-notice" hidden>NEW BEST SCORE</p>
+          <button id="againButton" class="primary-button" type="button"><span>もう一度運行</span><i aria-hidden="true">↻</i></button>
           <button id="titleButton" class="text-button" type="button">タイトルへ</button>
         </div>
       </section>
-
-      <div class="orientation-note" id="orientationNote" aria-hidden="true">横向きでも縦向きでも遊べます</div>
-      <div class="corner-mark" aria-hidden="true">AW<span> / 04</span></div>
     </main>
     <script type="module" src="./src/main.js?v=__BUILD_ID__"></script>
   </body>
