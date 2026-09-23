@@ -1,7 +1,11 @@
 const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'afterwake-' + BUILD_ID;
+const CACHE_NAME = 'afterwake-newgame1-' + BUILD_ID;
 const BASE_URL = new URL('./', self.location.href);
-const CACHE_PREFIX = 'afterwake-';
+const CACHE_PREFIX = 'afterwake-newgame1-';
+const LEGACY_CACHE_NAMES = new Set([
+  'afterwake-shell-v1',
+  'afterwake-d37f1d0ca8663515c72befadca1eab1b87a6e499',
+]);
 const NETWORK_FIRST_FILE = /\.(?:html?|mjs?|js|css|json|webmanifest)$/i;
 
 function withBuild(path) {
@@ -33,7 +37,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys
-      .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)
+      .filter((key) => (key.startsWith(CACHE_PREFIX) || LEGACY_CACHE_NAMES.has(key)) && key !== CACHE_NAME)
       .map((key) => caches.delete(key)));
     await self.clients.claim();
   })());

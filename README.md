@@ -50,6 +50,6 @@ python3 -m http.server 4173
 
 - 各デプロイの Git コミット SHA をビルド ID とし、JS・CSS・Service Worker の URL とキャッシュ名に使います。
 - HTML と `version.json` はネットワーク優先で取得し、`version.json` は `no-store` で確認します。
-- 新しい Service Worker は `skipWaiting()` / `clients.claim()` でバックグラウンド適用し、古い `afterwake-*` キャッシュだけを削除します。
+- 新しい Service Worker は `skipWaiting()` / `clients.claim()` でバックグラウンド適用し、古い `afterwake-newgame1-*` キャッシュと、移行元の AFTERWAKE キャッシュだけを削除します。他のアプリのキャッシュは対象外です。
 - プレイ中の自動リロードはしません。更新は次のページ表示から反映されます。
-- 古い画面が残るときは https://yz4git.github.io/newgame1/latest.html を開いて「最新版を開く」を押すと、このゲームの Service Worker とキャッシュだけを整理できます。
+- 古い画面が残るときは https://yz4git.github.io/newgame1/latest.html を開いて「最新版を開く」を押すと、このゲームの Service Worker と専用キャッシュだけを整理できます。
