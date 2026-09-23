@@ -1,55 +1,60 @@
-# AFTERWAKE
+# MIDNIGHT JUNCTION
 
-短いアーケードアクション。移動の軌跡で敵をタグ付けし、パルスでまとめて起爆して、中央のコアを5セクター守り抜きます。
+夜間の列車運行を担当するリアルタイム配線パズルです。列車の到着順と目的ホームを読み、線路上の分岐器を直接タップして、列車が到達する前に進路を組み替えます。
 
-**一文のゲーム設計:** 敵の進路を読み、移動で描いた線を交差させて、起爆のタイミングを選ぶゲームです。
+**一文のゲーム設計:** 次に来る列車を先読みし、分岐器をいつ・どの状態にするか判断して、複数の進路を同時に成立させるゲームです。
 
 ## 遊び方
 
-- 左側をドラッグして移動します。移動した場所に数秒残る「ウェイク」ができます。
-- 敵がウェイクを横切るとタグが付きます。
-- 移動距離でチャージしたら、PULSEを押してタグ付きの敵を一掃します。
-- オレンジの敵は突進前に進路を予告します。最終セクターでは衝撃波の青い切れ目が安全地帯です。
-- 敵を中央のコアへ到達させると耐久が減ります。セクターを抜けるとコアが少し回復します。
+- 列車の色／車体の文字 `A / B / C` が目的ホームです。
+- 線路上の `01–04` の分岐器をタップすると、直進とクロスを切り替えます。
+- 列車が分岐器へ接近すると一時的に `LOCK` されるため、到着する前に進路を作ります。
+- 画面下の `NEXT TRAINS` には入線位置と目的ホームが表示されます。先読みして次の列車まで準備できます。
+- 金縁の `EXP` 列車は通常より速く走ります。
+- SHIFT 04では02番分岐器が点検中になり、別ルートを使う必要があります。
+- 誤配を3回すると運行終了。各シフトを無誤配で抜けるとボーナスが入ります。
 
 ## 操作
 
 | 操作 | タッチ | キーボード |
 |---|---|---|
-| 移動 | 画面左側をドラッグ | WASD / 矢印キー |
-| PULSE | 画面右下のボタン | Space / Shift |
-| 一時停止 | 画面右側のⅡ | P / Escape |
+| 分岐器切替 | 分岐器を直接タップ | 1 / 2 / 3 / 4 |
+| 一時停止 | 左下の `Ⅱ` | P / Escape |
+| サウンド | 左下の `♪` | — |
 
-縦横どちらの向きでも遊べます。スコアとベスト記録はこの端末のブラウザー内に保存します。
+仮想スティックや攻撃ボタンは使いません。iPhoneでは画面そのものを配線盤として直接操作します。
 
 ## 起動
 
-静的ファイルだけで動作し、依存パッケージはありません。
+依存パッケージなしの静的ゲームです。
 
 ```sh
 python3 -m http.server 4173
 ```
 
-ブラウザーで `http://localhost:4173/` を開いてください。HTTPS環境ではホーム画面への追加とオフライン起動に対応します。
+ブラウザーで `http://localhost:4173/` を開いてください。HTTPSではPWA／オフライン起動に対応します。
 
 ## 実装メモ
 
-- Canvas 2D、固定60Hzシミュレーション、AudioContextの効果音
-- タッチとキーボード入力、safe-area対応、DPR上限1.75
-- スコア記録は `localStorage`。外部通信・外部アセットは使いません。
-- 詳細な設計判断は [`docs/design-notes.md`](docs/design-notes.md) を参照。
-
+- Canvas 2D、固定60Hzシミュレーション
+- 5シフト、通常列車／EXPRESS／メンテナンス制約
+- AudioContextによる短い状態音
+- safe-area、`touch-action: none`、pinch/double-tap/scroll抑制
+- フォーカス変化では自動ポーズせず、明示的なPause操作だけで停止
+- ベストスコア／ベストストリークは `localStorage`
+- 外部通信・外部画像・外部フォントなし
+- 詳細な設計判断は [`docs/design-notes.md`](docs/design-notes.md)
 
 ## GitHub Pages
 
-公開プレイ URL: https://yz4git.github.io/newgame1/
+公開プレイURL: https://yz4git.github.io/newgame1/
 
-`main` への更新は GitHub Actions から Pages にデプロイします。縦横どちらでも遊べます。iPhone では Safari で開いてホーム画面に追加できます。
+`main` 更新後、GitHub ActionsからPagesへデプロイします。
 
 ### 更新とキャッシュ
 
-- 各デプロイの Git コミット SHA をビルド ID とし、JS・CSS・Service Worker の URL とキャッシュ名に使います。
-- HTML と `version.json` はネットワーク優先で取得し、`version.json` は `no-store` で確認します。
-- 新しい Service Worker は `skipWaiting()` / `clients.claim()` でバックグラウンド適用し、古い `afterwake-newgame1-*` キャッシュと、移行元の AFTERWAKE キャッシュだけを削除します。他のアプリのキャッシュは対象外です。
-- プレイ中の自動リロードはしません。更新は次のページ表示から反映されます。
-- 古い画面が残るときは https://yz4git.github.io/newgame1/latest.html を開いて「最新版を開く」を押すと、このゲームの Service Worker と専用キャッシュだけを整理できます。
+- デプロイごとのGit commit SHAをbuild IDとしてJS/CSS/Service WorkerのURLとcache名へ埋め込みます。
+- HTML/JS/CSS/manifest/version系はネットワーク優先です。
+- 新Service Workerは `skipWaiting()` / `clients.claim()` で適用し、`midnight-junction-newgame1-*` と旧 `afterwake-newgame1-*` の専用cacheだけを整理します。
+- プレイ中の強制reloadは行いません。
+- 古い画面が残る場合は `https://yz4git.github.io/newgame1/latest.html` からこのprojectのService Worker/cacheだけを整理できます。
