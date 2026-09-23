@@ -1,9 +1,12 @@
 const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'midnight-junction-newgame1-' + BUILD_ID;
-const CACHE_PREFIX = 'midnight-junction-newgame1-';
+const CACHE_NAME = 'abyssal-echo-newgame1-' + BUILD_ID;
 const BASE_URL = new URL('./', self.location.href);
-const LEGACY_PREFIXES = ['afterwake-newgame1-', 'midnight-junction-newgame1-'];
-const LEGACY_EXACT = new Set([
+const OWNED_PREFIXES = [
+  'abyssal-echo-newgame1-',
+  'midnight-junction-newgame1-',
+  'afterwake-newgame1-',
+];
+const OWNED_EXACT = new Set([
   'afterwake-shell-v1',
   'afterwake-d37f1d0ca8663515c72befadca1eab1b87a6e499',
 ]);
@@ -38,7 +41,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter((key) => {
-      const owned = LEGACY_PREFIXES.some((prefix) => key.startsWith(prefix)) || LEGACY_EXACT.has(key);
+      const owned = OWNED_PREFIXES.some((prefix) => key.startsWith(prefix)) || OWNED_EXACT.has(key);
       return owned && key !== CACHE_NAME;
     }).map((key) => caches.delete(key)));
     await self.clients.claim();
