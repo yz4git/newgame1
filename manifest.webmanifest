@@ -1,13 +1,13 @@
 {
-  "name": "MIDNIGHT JUNCTION — Route Before Arrival",
-  "short_name": "JUNCTION",
-  "description": "分岐器を直接タップし、夜間列車を目的ホームへ導くリアルタイム配線パズル。",
+  "name": "ABYSSAL ECHO — Listen Into Darkness",
+  "short_name": "ABYSSAL ECHO",
+  "description": "ソナー波で見えない深海生物を探し、一瞬だけ現れる輪郭を直接タップして記録する探索ゲーム。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#050b12",
-  "theme_color": "#050b12",
+  "background_color": "#02070d",
+  "theme_color": "#02070d",
   "icons": [
     { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
