@@ -1,0 +1,9 @@
+{
+  "name": "afterwake",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/game.js && node --check src/main.js"
+  }
+}
