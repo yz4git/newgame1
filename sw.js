@@ -1,8 +1,9 @@
 const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'afterwake-newgame1-' + BUILD_ID;
+const CACHE_NAME = 'midnight-junction-newgame1-' + BUILD_ID;
+const CACHE_PREFIX = 'midnight-junction-newgame1-';
 const BASE_URL = new URL('./', self.location.href);
-const CACHE_PREFIX = 'afterwake-newgame1-';
-const LEGACY_CACHE_NAMES = new Set([
+const LEGACY_PREFIXES = ['afterwake-newgame1-', 'midnight-junction-newgame1-'];
+const LEGACY_EXACT = new Set([
   'afterwake-shell-v1',
   'afterwake-d37f1d0ca8663515c72befadca1eab1b87a6e499',
 ]);
@@ -36,9 +37,10 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys
-      .filter((key) => (key.startsWith(CACHE_PREFIX) || LEGACY_CACHE_NAMES.has(key)) && key !== CACHE_NAME)
-      .map((key) => caches.delete(key)));
+    await Promise.all(keys.filter((key) => {
+      const owned = LEGACY_PREFIXES.some((prefix) => key.startsWith(prefix)) || LEGACY_EXACT.has(key);
+      return owned && key !== CACHE_NAME;
+    }).map((key) => caches.delete(key)));
     await self.clients.claim();
   })());
 });
@@ -46,12 +48,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin || !url.pathname.startsWith(BASE_URL.pathname)) return;
 
-  const isBuildAsset = url.searchParams.get('v') === BUILD_ID;
-  if (isBuildAsset) {
+  if (url.searchParams.get('v') === BUILD_ID) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(request);
@@ -59,10 +59,7 @@ self.addEventListener('fetch', (event) => {
       const response = await fetch(request);
       if (response?.ok) await cache.put(request, response.clone());
       return response;
-    })().catch(async () => {
-      const cache = await caches.open(CACHE_NAME);
-      return (await cache.match(request)) || Response.error();
-    }));
+    })().catch(async () => (await caches.open(CACHE_NAME)).match(request) || Response.error()));
     return;
   }
 
@@ -70,20 +67,13 @@ self.addEventListener('fetch', (event) => {
   if (networkFirst) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cacheKey = request.mode === 'navigate'
-        ? new Request(url.origin + url.pathname)
-        : request;
+      const cacheKey = request.mode === 'navigate' ? new Request(url.origin + url.pathname) : request;
       try {
         const response = await fetch(request, { cache: 'no-store' });
         if (response?.ok) await cache.put(cacheKey, response.clone());
         return response;
       } catch {
-        const cached = await cache.match(cacheKey);
-        if (cached) return cached;
-        if (request.mode === 'navigate') {
-          return (await cache.match(new URL('./index.html', BASE_URL).href)) || Response.error();
-        }
-        return Response.error();
+        return (await cache.match(cacheKey)) || (request.mode === 'navigate' ? cache.match(new URL('./index.html', BASE_URL).href) : null) || Response.error();
       }
     })());
     return;
@@ -91,10 +81,6 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    const response = await fetch(request);
-    if (response?.ok) await cache.put(request, response.clone());
-    return response;
+    return (await cache.match(request)) || fetch(request);
   })());
 });
