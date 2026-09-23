@@ -1,13 +1,13 @@
 {
-  "name": "AFTERWAKE — Trace. Mark. Pulse.",
-  "short_name": "AFTERWAKE",
-  "description": "移動の軌跡で敵をタグ付けし、パルスでコアを守るアーケードアクション。",
+  "name": "MIDNIGHT JUNCTION — Route Before Arrival",
+  "short_name": "JUNCTION",
+  "description": "分岐器を直接タップし、夜間列車を目的ホームへ導くリアルタイム配線パズル。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#060913",
-  "theme_color": "#060913",
+  "background_color": "#050b12",
+  "theme_color": "#050b12",
   "icons": [
     { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
