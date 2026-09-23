@@ -1,48 +1,60 @@
-import { MidnightJunctionGame } from './game.js?v=__BUILD_ID__';
+import { AbyssalEchoGame } from './game.js?v=__BUILD_ID__';
 
 const BUILD_ID = '__BUILD_ID__';
 const $ = (id) => document.getElementById(id);
 const canvas = $('gameCanvas');
-const game = new MidnightJunctionGame(canvas);
+const game = new AbyssalEchoGame(canvas);
 
-const titleScreen = $('titleScreen');
 const hud = $('hud');
+const titleScreen = $('titleScreen');
 const pauseScreen = $('pauseScreen');
 const resultScreen = $('resultScreen');
-const shiftNumber = $('shiftNumber');
-const shiftName = $('shiftName');
-const shiftHint = $('shiftHint');
+const diveNumber = $('diveNumber');
+const diveName = $('diveName');
+const diveHint = $('diveHint');
+const specimenValue = $('specimenValue');
+const specimenTarget = $('specimenTarget');
 const scoreValue = $('scoreValue');
 const streakValue = $('streakValue');
-const servicePips = $('servicePips');
-const progressFill = $('progressFill');
-const nextQueue = $('nextQueue');
+const timeValue = $('timeValue');
+const sonarPips = $('sonarPips');
 const toast = $('toast');
 const soundButton = $('soundButton');
 const bestReadout = $('bestReadout');
 
-let soundEnabled = true;
+let audioEnabled = true;
 let toastTimer = 0;
-let lastState = 'title';
+let lastUiState = 'title';
 
-const preventGesture = (event) => {
+const cancelBrowserGesture = (event) => {
   if (event.cancelable) event.preventDefault();
 };
 
 for (const type of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) {
-  document.addEventListener(type, preventGesture, { passive: false });
+  document.addEventListener(type, cancelBrowserGesture, { passive: false });
 }
-document.addEventListener('touchmove', (event) => {
-  if (event.target instanceof Element && event.target.closest('#app')) preventGesture(event);
+
+document.addEventListener('touchstart', (event) => {
+  if (event.touches.length > 1 && event.cancelable) event.preventDefault();
 }, { passive: false });
+
+document.addEventListener('touchmove', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if ((event.touches.length > 1 || target?.closest('#app')) && event.cancelable) event.preventDefault();
+}, { passive: false });
+
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (event) => {
-  if (event.changedTouches.length === 1) {
-    const now = performance.now();
-    if (now - lastTouchEnd < 360) preventGesture(event);
-    lastTouchEnd = now;
+  if (event.touches.length !== 0 || event.changedTouches.length !== 1) {
+    lastTouchEnd = 0;
+    return;
   }
+  const now = performance.now();
+  if (lastTouchEnd && now - lastTouchEnd < 360 && event.cancelable) event.preventDefault();
+  lastTouchEnd = now;
 }, { passive: false });
+
+document.addEventListener('touchcancel', () => { lastTouchEnd = 0; }, { passive: true });
 document.addEventListener('contextmenu', (event) => {
   if (event.target instanceof Element && event.target.closest('#app')) event.preventDefault();
 });
@@ -57,71 +69,43 @@ window.visualViewport?.addEventListener('resize', () => {
   game.resize();
 }, { passive: true });
 
-function renderService(count) {
-  if (servicePips.children.length !== 3) {
-    servicePips.replaceChildren(...Array.from({ length: 3 }, () => {
+function renderSonar(charge, maxCharge) {
+  if (sonarPips.children.length !== maxCharge) {
+    sonarPips.replaceChildren(...Array.from({ length: maxCharge }, () => {
       const pip = document.createElement('i');
-      pip.className = 'service-pip';
+      pip.className = 'sonar-pip';
       return pip;
     }));
   }
-  [...servicePips.children].forEach((pip, index) => pip.classList.toggle('lost', index >= count));
-}
-
-function renderQueue(upcoming) {
-  nextQueue.replaceChildren();
-  if (!upcoming.length) {
-    const done = document.createElement('span');
-    done.className = 'queue-empty';
-    done.textContent = 'END OF BOARD';
-    nextQueue.append(done);
-    return;
-  }
-  for (const item of upcoming) {
-    const chip = document.createElement('div');
-    chip.className = `queue-chip lane-${item.target}${item.express ? ' express' : ''}`;
-    chip.setAttribute('aria-label', `次の列車 入線${item.source + 1} 目的地${String.fromCharCode(65 + item.target)}${item.express ? ' エクスプレス' : ''}`);
-    const source = document.createElement('small');
-    source.textContent = `IN ${item.source + 1}`;
-    const arrow = document.createElement('b');
-    arrow.textContent = '→';
-    const target = document.createElement('strong');
-    target.textContent = String.fromCharCode(65 + item.target);
-    chip.append(source, arrow, target);
-    if (item.express) {
-      const exp = document.createElement('em');
-      exp.textContent = 'EXP';
-      chip.append(exp);
-    }
-    nextQueue.append(chip);
-  }
+  [...sonarPips.children].forEach((pip, index) => pip.classList.toggle('empty', index >= charge));
 }
 
 function syncHud(snapshot = game.getSnapshot()) {
-  shiftNumber.textContent = `SHIFT ${String(snapshot.shiftIndex + 1).padStart(2, '0')} / 05`;
-  shiftName.textContent = snapshot.shiftName;
-  shiftHint.textContent = snapshot.shiftHint;
+  diveNumber.textContent = `DIVE ${String(snapshot.diveIndex + 1).padStart(2, '0')} / 04`;
+  diveName.textContent = snapshot.diveName;
+  diveHint.textContent = snapshot.diveHint;
+  specimenValue.textContent = String(snapshot.captured).padStart(2, '0');
+  specimenTarget.textContent = `/ ${String(snapshot.target).padStart(2, '0')}`;
   scoreValue.textContent = String(snapshot.score).padStart(6, '0');
-  streakValue.textContent = snapshot.streak > 1 ? `STREAK ×${snapshot.streak}` : 'STREAK ×1';
+  streakValue.textContent = snapshot.streak > 1 ? `CHAIN ×${snapshot.streak}` : 'CHAIN ×1';
   streakValue.classList.toggle('hot', snapshot.streak >= 3);
-  renderService(snapshot.service);
-  const total = Math.max(1, snapshot.total);
-  progressFill.style.width = `${Math.min(100, ((snapshot.resolved || 0) / total) * 100)}%`;
-  renderQueue(snapshot.upcoming);
+  timeValue.textContent = Math.ceil(snapshot.timeLeft).toString().padStart(2, '0');
+  timeValue.classList.toggle('danger', snapshot.timeLeft <= 10);
+  renderSonar(snapshot.charge, snapshot.maxCharge);
 }
 
 function setState(state, detail = {}) {
-  lastState = state;
+  lastUiState = state;
   if (state === 'start') {
     titleScreen.hidden = true;
-    resultScreen.hidden = true;
     pauseScreen.hidden = true;
+    resultScreen.hidden = true;
     hud.hidden = false;
-    syncHud();
+    syncHud(detail?.diveIndex == null ? game.getSnapshot() : detail);
     return;
   }
-  if (state === 'shift' || state === 'score') {
-    if (!hud.hidden) syncHud(detail?.shiftIndex == null ? game.getSnapshot() : detail);
+  if (state === 'dive' || state === 'hud') {
+    if (!hud.hidden) syncHud(detail?.diveIndex == null ? game.getSnapshot() : detail);
     return;
   }
   if (state === 'pause') {
@@ -140,17 +124,17 @@ function setState(state, detail = {}) {
     titleScreen.hidden = true;
     resultScreen.hidden = false;
     const victory = state === 'victory';
-    $('resultEyebrow').textContent = victory ? 'DAWN SERVICE COMPLETE' : `BOARD CLOSED · SHIFT ${String(game.shiftIndex + 1).padStart(2, '0')}`;
-    $('resultTitle').textContent = victory ? 'ALL LINES HOME' : 'SERVICE SUSPENDED';
+    $('resultEyebrow').textContent = victory ? 'SURVEY COMPLETE' : `SIGNAL LOST · DIVE ${String(game.diveIndex + 1).padStart(2, '0')}`;
+    $('resultTitle').textContent = victory ? 'THE DEEP ANSWERED' : 'OXYGEN WINDOW CLOSED';
     $('resultSubtitle').textContent = victory
-      ? 'すべての列車を夜明けまでつないだ。次は、より少ない迷いで。'
-      : '誤配が3回に達した。分岐器は列車が来る前に組み替える。';
+      ? '見えない海の動きを読み切った。次は、より少ないPINGで。'
+      : '必要な標本数に届かなかった。波を広く打つより、未来位置へ置く。';
     $('resultScore').textContent = String(game.score).padStart(6, '0');
     $('resultStreak').textContent = `×${game.bestStreakThisRun}`;
-    $('resultShift').textContent = victory ? '5 / 5' : `${game.shiftIndex + 1} / 5`;
+    $('resultPings').textContent = String(game.pingsUsed);
     const record = detail.isScoreRecord || detail.isStreakRecord;
     $('recordNotice').hidden = !record;
-    $('recordNotice').textContent = detail.isScoreRecord ? 'NEW BEST SCORE' : 'NEW BEST STREAK';
+    $('recordNotice').textContent = detail.isScoreRecord ? 'NEW BEST SCORE' : 'NEW BEST CHAIN';
     const records = game.getRecords();
     bestReadout.textContent = records.bestScore > 0 ? `BEST ${String(records.bestScore).padStart(6, '0')}` : 'BEST —';
     return;
@@ -164,7 +148,6 @@ function setState(state, detail = {}) {
 }
 
 game.setOnChange(setState);
-game.setQueueCallback((queue) => renderQueue(queue));
 game.setToastCallback((title, subtitle = '') => {
   toast.replaceChildren();
   const strong = document.createElement('strong');
@@ -181,8 +164,9 @@ game.setToastCallback((title, subtitle = '') => {
 });
 
 game.setFxCallback((type) => {
-  if (type === 'switch' && navigator.vibrate) navigator.vibrate(8);
-  if (type === 'miss' && navigator.vibrate) navigator.vibrate([18, 30, 18]);
+  if (!navigator.vibrate) return;
+  if (type === 'capture') navigator.vibrate(12);
+  if (type === 'empty') navigator.vibrate(6);
 });
 
 const records = game.getRecords();
@@ -196,11 +180,11 @@ $('resumeButton').addEventListener('click', () => game.setPaused(false));
 $('restartButton').addEventListener('click', () => game.startAgain());
 
 soundButton.addEventListener('click', () => {
-  soundEnabled = !soundEnabled;
-  game.setAudioEnabled(soundEnabled);
-  soundButton.textContent = soundEnabled ? '♪' : '×';
-  soundButton.classList.toggle('muted', !soundEnabled);
-  soundButton.setAttribute('aria-label', soundEnabled ? 'サウンドをオフにする' : 'サウンドをオンにする');
+  audioEnabled = !audioEnabled;
+  game.setAudioEnabled(audioEnabled);
+  soundButton.textContent = audioEnabled ? '♪' : '×';
+  soundButton.classList.toggle('muted', !audioEnabled);
+  soundButton.setAttribute('aria-label', audioEnabled ? 'サウンドをオフにする' : 'サウンドをオンにする');
 });
 
 canvas.addEventListener('pointerdown', (event) => {
@@ -210,16 +194,20 @@ canvas.addEventListener('pointerdown', (event) => {
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'Escape' || event.code === 'KeyP') {
-    if (lastState === 'pause') game.setPaused(false);
+    if (lastUiState === 'pause') game.setPaused(false);
     else if (game.state === 'playing') game.setPaused(true);
     event.preventDefault();
     return;
   }
-  if (game.keyboard(event.code)) event.preventDefault();
+  if (event.code === 'Space' && game.state === 'playing' && !game.paused) {
+    const rect = canvas.getBoundingClientRect();
+    game.handlePointer(rect.left + rect.width * 0.5, rect.top + rect.height * 0.5);
+    event.preventDefault();
+  }
 });
 
-// Do not auto-pause on blur/visibility changes. On mobile, browser chrome and
-// system gestures can transiently change focus; pausing remains an explicit action.
+// Do not auto-pause on blur/visibility changes. Mobile browser chrome can
+// transiently change focus; pausing is an explicit player action only.
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => {
