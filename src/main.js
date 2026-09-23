@@ -45,10 +45,17 @@ document.addEventListener('touchmove', (event) => {
 }, { passive: false });
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (event) => {
+  if (event.touches.length !== 0 || event.changedTouches.length !== 1) {
+    lastTouchEnd = 0;
+    return;
+  }
   const now = Date.now();
   if (lastTouchEnd && now - lastTouchEnd < 350 && event.cancelable) event.preventDefault();
   lastTouchEnd = now;
 }, { passive: false });
+document.addEventListener('touchcancel', () => {
+  lastTouchEnd = 0;
+}, { passive: true });
 
 const keepViewportAtOrigin = () => {
   if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
