@@ -38,3 +38,18 @@ python3 -m http.server 4173
 - タッチとキーボード入力、safe-area対応、DPR上限1.75
 - スコア記録は `localStorage`。外部通信・外部アセットは使いません。
 - 詳細な設計判断は [`docs/design-notes.md`](docs/design-notes.md) を参照。
+
+
+## GitHub Pages
+
+公開プレイ URL: https://yz4git.github.io/newgame1/
+
+`main` への更新は GitHub Actions から Pages にデプロイします。縦横どちらでも遊べます。iPhone では Safari で開いてホーム画面に追加できます。
+
+### 更新とキャッシュ
+
+- 各デプロイの Git コミット SHA をビルド ID とし、JS・CSS・Service Worker の URL とキャッシュ名に使います。
+- HTML と `version.json` はネットワーク優先で取得し、`version.json` は `no-store` で確認します。
+- 新しい Service Worker は `skipWaiting()` / `clients.claim()` でバックグラウンド適用し、古い `afterwake-*` キャッシュだけを削除します。
+- プレイ中の自動リロードはしません。更新は次のページ表示から反映されます。
+- 古い画面が残るときは https://yz4git.github.io/newgame1/latest.html を開いて「最新版を開く」を押すと、このゲームの Service Worker とキャッシュだけを整理できます。

@@ -1,0 +1,56 @@
+name: Publish AFTERWAKE to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site with per-commit asset URLs
+        env:
+          BUILD_ID: ${{ github.sha }}
+        run: |
+          set -eu
+          rm -rf _site
+          mkdir -p _site/src
+          cp index.html sw.js latest.html manifest.webmanifest icon.svg _site/
+          cp src/game.js src/main.js src/styles.css _site/src/
+          printf '{"buildId":"%s"}\n' "$BUILD_ID" > _site/version.json
+          touch _site/.nojekyll
+          for file in _site/index.html _site/sw.js _site/src/main.js; do
+            sed -i "s/__BUILD_ID__/$BUILD_ID/g" "$file"
+          done
+          if rg -n "__BUILD_ID__" _site; then
+            echo "Unexpanded build ID placeholder detected."
+            exit 1
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

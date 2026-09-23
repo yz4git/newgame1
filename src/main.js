@@ -1,4 +1,6 @@
-import { AfterwakeGame } from './game.js';
+import { AfterwakeGame } from './game.js?v=__BUILD_ID__';
+
+const BUILD_ID = '__BUILD_ID__';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gameCanvas');
@@ -188,8 +190,28 @@ window.setInterval(() => {
 
 game.startLoop();
 
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
-  }, { once: true });
+async function prepareOfflineSupport() {
+  if (!('serviceWorker' in navigator) || !(location.protocol === 'https:' || location.hostname === 'localhost')) return;
+
+  // Check the deployed build without consulting Safari's HTTP cache. An update
+  // installs in the background; a running session is never reloaded.
+  fetch('./version.json?check=' + encodeURIComponent(BUILD_ID), { cache: 'no-store' })
+    .then((response) => response.ok ? response.json() : null)
+    .then((version) => {
+      if (version?.buildId && version.buildId !== BUILD_ID) {
+        document.documentElement.dataset.buildUpdateAvailable = version.buildId;
+      }
+    })
+    .catch(() => {});
+
+  try {
+    const registration = await navigator.serviceWorker.register('./sw.js?v=' + BUILD_ID, { updateViaCache: 'none' });
+    registration.update().catch(() => {});
+  } catch {
+    // The game remains playable if offline storage is unavailable.
+  }
 }
+
+window.addEventListener('load', () => {
+  prepareOfflineSupport();
+}, { once: true });
