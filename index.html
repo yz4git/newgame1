@@ -3,94 +3,97 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#050b12" />
-    <meta name="description" content="夜間の列車運行を担当し、分岐器を直接タップして目的ホームへ導くリアルタイム配線パズル。" />
+    <meta name="theme-color" content="#02070d" />
+    <meta name="description" content="ソナー波で見えない深海生物を探し、一瞬だけ現れる輪郭を直接タップして記録する探索ゲーム。" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg?v=__BUILD_ID__" />
     <link rel="manifest" href="./manifest.webmanifest?v=__BUILD_ID__" />
     <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__" />
-    <title>MIDNIGHT JUNCTION — Route Before Arrival</title>
+    <title>ABYSSAL ECHO — Listen Into Darkness</title>
   </head>
   <body>
     <main id="app" class="app">
-      <canvas id="gameCanvas" aria-label="MIDNIGHT JUNCTION ゲーム画面。分岐器をタップして列車を目的ホームへ導きます。"></canvas>
+      <canvas id="gameCanvas" aria-label="ABYSSAL ECHO ゲーム画面。暗い海をタップしてソナーを放ち、見えた生物を直接タップして記録します。"></canvas>
 
       <div id="hud" class="hud" hidden>
         <div class="hud-top">
-          <section class="hud-card" aria-label="運行信頼度">
-            <span class="eyebrow">SERVICE</span>
-            <div id="servicePips" class="service-pips"></div>
+          <section class="hud-card specimen-card" aria-label="標本進行">
+            <span class="eyebrow">SPECIMENS</span>
+            <div class="specimen-count"><strong id="specimenValue">00</strong><span id="specimenTarget">/ 05</span></div>
           </section>
 
-          <section class="shift-card" aria-label="現在のシフト">
-            <span id="shiftNumber" class="eyebrow">SHIFT 01 / 05</span>
-            <strong id="shiftName">FIRST BOARD</strong>
-            <span id="shiftHint">分岐器をタップして目的ホームへ</span>
+          <section class="dive-card" aria-label="現在のダイブ">
+            <span id="diveNumber" class="eyebrow">DIVE 01 / 04</span>
+            <strong id="diveName">SHALLOW LISTEN</strong>
+            <span id="diveHint">暗い水をタップしてPING</span>
           </section>
 
           <section class="hud-card score-card" aria-label="スコア">
-            <span class="eyebrow">DISPATCH SCORE</span>
+            <span class="eyebrow">FIELD SCORE</span>
             <strong id="scoreValue">000000</strong>
-            <span id="streakValue" class="streak">STREAK ×1</span>
+            <span id="streakValue" class="streak">CHAIN ×1</span>
           </section>
         </div>
 
-        <div class="progress-track" aria-hidden="true"><i id="progressFill"></i></div>
-
-        <div class="hud-actions">
-          <button id="soundButton" class="icon-button" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
-          <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
+        <div class="hud-bottom-left">
+          <div class="sonar-card" aria-label="ソナーチャージ">
+            <span class="eyebrow">SONAR</span>
+            <div id="sonarPips" class="sonar-pips"></div>
+          </div>
+          <div class="hud-actions">
+            <button id="soundButton" class="icon-button" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
+            <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
+          </div>
         </div>
 
-        <div class="control-hint"><b>TAP SWITCH</b> 列車が来る前に進路を組む</div>
-
-        <section class="queue-panel" aria-label="次に来る列車">
-          <div class="queue-label">NEXT TRAINS · IN → HOME</div>
-          <div id="nextQueue" class="next-queue"></div>
+        <section class="time-card" aria-label="残り時間">
+          <span class="eyebrow">WINDOW</span>
+          <strong id="timeValue">42</strong><small>SEC</small>
         </section>
 
+        <div class="control-hint"><b>TAP WATER</b> PING　／　<b>TAP ECHO</b> LOG</div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
       </div>
 
       <section id="titleScreen" class="screen title-screen">
-        <div class="title-topline"><span>01:47 · NIGHT OPERATIONS</span><span>CENTRAL SIGNAL BOX</span></div>
+        <div class="title-topline"><span>PELAGIC SURVEY / 03:12</span><span>PASSIVE LIGHT OFFLINE</span></div>
         <div class="title-content">
-          <div class="title-kicker"><i aria-hidden="true"></i> REAL-TIME ROUTING PUZZLE</div>
-          <h1>MIDNIGHT <span>JUNCTION</span></h1>
-          <p class="title-jp">列車が来る前に、線路の未来を決める。</p>
-          <p class="title-desc">色付きの列車を同じ色のホームへ。<br />分岐器を直接タップし、到着順を読みながら夜明けまで運行をつなごう。</p>
-          <button id="startButton" class="primary-button" type="button"><span>夜間運行を開始</span><i aria-hidden="true">→</i></button>
+          <div class="title-kicker"><i aria-hidden="true"></i> TOUCH-SONAR EXPLORATION</div>
+          <h1>ABYSSAL <span>ECHO</span></h1>
+          <p class="title-jp">見えない海を、波紋で読む。</p>
+          <p class="title-desc">暗い水面をタップするとソナーが広がる。<br />波に触れて一瞬だけ現れた生物を、見失う前に直接タップして記録しよう。</p>
+          <button id="startButton" class="primary-button" type="button"><span>潜航調査を開始</span><i aria-hidden="true">◌</i></button>
           <div class="control-summary">
-            <span><b>TAP</b> 分岐器を切り替える</span>
-            <span><b>READ</b> NEXTで次の列車を先読み</span>
-            <span><b>1–4</b> キーボード操作</span>
+            <span><b>TAP WATER</b> ソナーを放つ</span>
+            <span><b>TAP ECHO</b> 標本を記録</span>
+            <span><b>READ MOTION</b> 軌跡から次の位置を読む</span>
           </div>
           <a class="fresh-link" href="./latest.html?v=__BUILD_ID__">更新が反映されない場合</a>
         </div>
-        <div class="title-bottomline"><span>5 SHIFTS · 3 PLATFORMS · ONE SIGNAL BOX</span><span id="bestReadout">BEST —</span></div>
+        <div class="title-bottomline"><span>4 DIVES · LIMITED SONAR · NO LIGHT</span><span id="bestReadout">BEST —</span></div>
       </section>
 
       <section id="pauseScreen" class="screen pause-screen" hidden>
         <div class="modal-panel">
-          <span class="eyebrow">SIGNAL BOX PAUSED</span>
-          <h2>運行を保留中</h2>
-          <p>列車の位置は止まっています。再開すると同じ状態から続きます。</p>
-          <button id="resumeButton" class="primary-button" type="button"><span>運行を再開</span><i aria-hidden="true">▶</i></button>
-          <button id="restartButton" class="text-button" type="button">最初のシフトからやり直す</button>
+          <span class="eyebrow">SONAR STANDBY</span>
+          <h2>調査を保留中</h2>
+          <p>生物と波紋は停止しています。同じ状態から再開できます。</p>
+          <button id="resumeButton" class="primary-button" type="button"><span>調査を再開</span><i aria-hidden="true">▶</i></button>
+          <button id="restartButton" class="text-button" type="button">最初から潜り直す</button>
         </div>
       </section>
 
       <section id="resultScreen" class="screen result-screen" hidden>
         <div class="result-panel">
-          <span id="resultEyebrow" class="eyebrow">DAWN SERVICE COMPLETE</span>
-          <h2 id="resultTitle">ALL LINES HOME</h2>
-          <p id="resultSubtitle">すべての列車を夜明けまでつないだ。</p>
+          <span id="resultEyebrow" class="eyebrow">SURVEY COMPLETE</span>
+          <h2 id="resultTitle">THE DEEP ANSWERED</h2>
+          <p id="resultSubtitle">見えない海の動きを読み切った。</p>
           <div class="result-stats">
-            <div><span>FINAL SCORE</span><strong id="resultScore">000000</strong></div>
-            <div><span>BEST STREAK</span><strong id="resultStreak">×0</strong></div>
-            <div><span>SHIFT</span><strong id="resultShift">5 / 5</strong></div>
+            <div><span>FIELD SCORE</span><strong id="resultScore">000000</strong></div>
+            <div><span>BEST CHAIN</span><strong id="resultStreak">×0</strong></div>
+            <div><span>PINGS USED</span><strong id="resultPings">0</strong></div>
           </div>
           <p id="recordNotice" class="record-notice" hidden>NEW BEST SCORE</p>
-          <button id="againButton" class="primary-button" type="button"><span>もう一度運行</span><i aria-hidden="true">↻</i></button>
+          <button id="againButton" class="primary-button" type="button"><span>もう一度潜る</span><i aria-hidden="true">↻</i></button>
           <button id="titleButton" class="text-button" type="button">タイトルへ</button>
         </div>
       </section>
