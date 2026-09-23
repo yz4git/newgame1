@@ -175,7 +175,8 @@ window.addEventListener('keydown', (event) => {
 });
 window.addEventListener('keyup', (event) => game.keyUp(event));
 window.addEventListener('blur', () => {
-  if (game.state === 'playing') game.setPaused(true);
+  // Mobile Safari can blur during pointer input; visibilitychange handles backgrounding.
+  game.clearKeyboard();
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.state === 'playing') game.setPaused(true);

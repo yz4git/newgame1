@@ -443,6 +443,8 @@ export class AfterwakeGame {
 
   keyUp(event) { this.keyboard.delete(event.key.toLowerCase()); }
 
+  clearKeyboard() { this.keyboard.clear(); }
+
   keyboardVector() {
     let x = this.input.x;
     let y = this.input.y;
