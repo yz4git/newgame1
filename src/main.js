@@ -28,6 +28,38 @@ let toastHideTimer = 0;
 let audioEnabled = true;
 let lastUiState = '';
 
+const cancelBrowserGesture = (event) => {
+  if (event.cancelable) event.preventDefault();
+};
+
+// iOS Safari can start pinch or smart-zoom gestures even with viewport scaling disabled.
+for (const type of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) {
+  document.addEventListener(type, cancelBrowserGesture, { passive: false });
+}
+document.addEventListener('touchstart', (event) => {
+  if (event.touches.length > 1 && event.cancelable) event.preventDefault();
+}, { passive: false });
+document.addEventListener('touchmove', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if ((event.touches.length > 1 || target?.closest('#app')) && event.cancelable) event.preventDefault();
+}, { passive: false });
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (event) => {
+  const now = Date.now();
+  if (lastTouchEnd && now - lastTouchEnd < 350 && event.cancelable) event.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+
+const keepViewportAtOrigin = () => {
+  if (window.scrollX !== 0 || window.scrollY !== 0) window.scrollTo(0, 0);
+};
+window.addEventListener('scroll', keepViewportAtOrigin, { passive: true });
+window.visualViewport?.addEventListener('scroll', keepViewportAtOrigin, { passive: true });
+window.visualViewport?.addEventListener('resize', () => {
+  keepViewportAtOrigin();
+  game.resize();
+}, { passive: true });
+
 game.setJoystick($('joystick'));
 
 const records = game.getRecords();
@@ -136,7 +168,17 @@ $('restartButton').addEventListener('click', () => {
 $('againButton').addEventListener('click', () => game.startAgain());
 $('titleButton').addEventListener('click', () => game.restart());
 $('pauseButton').addEventListener('click', () => game.setPaused(true));
-pulseButton.addEventListener('click', () => game.pulse());
+pulseButton.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0 || pulseButton.disabled) return;
+  event.preventDefault();
+  try { pulseButton.setPointerCapture(event.pointerId); } catch { /* capture is optional */ }
+  game.pulse();
+}, { passive: false });
+pulseButton.addEventListener('click', (event) => {
+  // Pointer activation fires on pointerdown for reliable multitouch; keep keyboard
+  // and assistive-technology click activation.
+  if (event.detail === 0) game.pulse();
+});
 
 soundButton.addEventListener('click', () => {
   audioEnabled = !audioEnabled;
