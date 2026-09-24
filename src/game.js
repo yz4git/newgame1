@@ -8,74 +8,60 @@ const STAGES = [
   {
     name: 'FIRST RECOIL',
     hint: '船体を横切るようにドラッグ。切り落とした側と逆へ反動する',
-    time: 48,
-    start: [0.24, 0.52],
-    goal: [0.78, 0.52],
-    velocity: [0, 0],
-    angular: 0,
-    goalRadius: 88,
-    maxSpeed: 48,
-    targetAngle: null,
-    gate: null,
-    core: [0, 0],
+    time: 48, start: [0.24, 0.52], goal: [0.78, 0.52], velocity: [0, 0], angular: 0,
+    goalRadius: 88, maxSpeed: 48, targetAngle: null, gate: null, core: [0, 0],
   },
   {
     name: 'BRAKE VECTOR',
     hint: '進みすぎる時は、進行方向側を切って逆向きの反動を作る',
-    time: 50,
-    start: [0.20, 0.44],
-    goal: [0.79, 0.58],
-    velocity: [74, 12],
-    angular: 0,
-    goalRadius: 84,
-    maxSpeed: 42,
-    targetAngle: null,
-    gate: null,
-    core: [6, -3],
+    time: 50, start: [0.20, 0.44], goal: [0.79, 0.58], velocity: [74, 12], angular: 0,
+    goalRadius: 84, maxSpeed: 42, targetAngle: null, gate: null, core: [6, -3],
   },
   {
     name: 'COUNTERSPIN',
     hint: '重心から外れたCUTは回転も生む。反動矢印とCW/CCWを読む',
-    time: 56,
-    start: [0.24, 0.60],
-    goal: [0.77, 0.40],
-    velocity: [12, -6],
-    angular: 0.62,
-    goalRadius: 82,
-    maxSpeed: 40,
-    targetAngle: 0,
-    angleTolerance: 0.34,
-    gate: null,
-    core: [-8, 5],
+    time: 56, start: [0.24, 0.60], goal: [0.77, 0.40], velocity: [12, -6], angular: 0.62,
+    goalRadius: 82, maxSpeed: 40, targetAngle: 0, angleTolerance: 0.34, gate: null, core: [-8, 5],
   },
   {
     name: 'NARROW GATE',
     hint: '壁の隙間に合わせて船体を削る。形そのものが通行条件になる',
-    time: 62,
-    start: [0.20, 0.50],
-    goal: [0.82, 0.50],
-    velocity: [18, 0],
-    angular: 0.08,
-    goalRadius: 78,
-    maxSpeed: 42,
-    targetAngle: null,
-    gate: { x: 0.56, gapY: 0.50, gap: 126 },
-    core: [5, 0],
+    time: 62, start: [0.20, 0.50], goal: [0.82, 0.50], velocity: [18, 0], angular: 0.08,
+    goalRadius: 78, maxSpeed: 42, targetAngle: null,
+    gate: { x: 0.56, gapY: 0.50, gap: 126 }, core: [5, 0],
   },
   {
     name: 'VECTOR LOCK',
     hint: '質量・速度・回転・ゲートを一度に整え、縦向きでLOCKする',
-    time: 70,
-    start: [0.18, 0.66],
-    goal: [0.82, 0.34],
-    velocity: [36, -18],
-    angular: -0.48,
-    goalRadius: 74,
-    maxSpeed: 36,
-    targetAngle: Math.PI / 2,
-    angleTolerance: 0.28,
-    gate: { x: 0.55, gapY: 0.47, gap: 116 },
-    core: [-10, 7],
+    time: 70, start: [0.18, 0.66], goal: [0.82, 0.34], velocity: [36, -18], angular: -0.48,
+    goalRadius: 74, maxSpeed: 36, targetAngle: Math.PI / 2, angleTolerance: 0.28,
+    gate: { x: 0.55, gapY: 0.47, gap: 116 }, core: [-10, 7],
+  },
+  {
+    name: 'SCRAP LINK',
+    hint: '赤い切断片も道具。左のSCRAP SWITCHへ飛ばしつつ右へ進む',
+    time: 62, start: [0.32, 0.54], goal: [0.82, 0.54], velocity: [0, 0], angular: 0,
+    goalRadius: 80, maxSpeed: 44, targetAngle: null, gate: null, core: [0, 0],
+    switches: [{ x: 0.12, y: 0.54, r: 21 }],
+  },
+  {
+    name: 'HEAVY VECTOR',
+    hint: '二重リングは高密度材。面積より「どの質量を捨てるか」で反動が変わる',
+    time: 66, start: [0.22, 0.64], goal: [0.80, 0.35], velocity: [10, -4], angular: 0.18,
+    goalRadius: 78, maxSpeed: 40, targetAngle: 0.12, angleTolerance: 0.36, gate: null, core: [3, -2],
+    massNodes: [
+      { x: -0.48, y: 0.16, weight: 0.17 },
+      { x: 0.34, y: -0.34, weight: 0.09 },
+    ],
+  },
+  {
+    name: 'TWIN PURPOSE',
+    hint: '1本のCUTで破片をSWITCHへ、自機をゲートへ。最後に縦向きでLOCKする',
+    time: 80, start: [0.25, 0.66], goal: [0.82, 0.31], velocity: [18, -4], angular: -0.30,
+    goalRadius: 72, maxSpeed: 34, targetAngle: Math.PI / 2, angleTolerance: 0.26,
+    gate: { x: 0.56, gapY: 0.47, gap: 116, requiresSwitch: true }, core: [-7, 6],
+    switches: [{ x: 0.13, y: 0.66, r: 20 }],
+    massNodes: [{ x: -0.46, y: 0.18, weight: 0.15 }],
   },
 ];
 
@@ -220,6 +206,11 @@ class AudioBus {
     this.tone(95, 0.11, 'triangle', 0.024, 58);
   }
 
+  switchHit() {
+    this.tone(290, 0.11, 'square', 0.015, 430);
+    this.tone(580, 0.16, 'sine', 0.018, 760, 0.055);
+  }
+
   dock() {
     [392, 523.25, 659.25].forEach((f, i) => this.tone(f, 0.18, 'sine', 0.019, f * 1.02, i * 0.07));
   }
@@ -249,12 +240,14 @@ export class VectorCutGame {
     this.totalCollisions = 0;
     this.massRatio = 1;
     this.initialArea = 1;
+    this.initialMass = 1;
     this.dockTimer = 0;
     this.clearTimer = 0;
     this.collisionCooldown = 0;
     this.body = null;
     this.goal = null;
     this.gate = null;
+    this.switches = [];
     this.fragments = [];
     this.sparks = [];
     this.drag = null;
@@ -329,6 +322,7 @@ export class VectorCutGame {
     this.score = 0;
     this.totalCuts = 0;
     this.totalCollisions = 0;
+    this.totalScrapLinks = 0;
     this.startStage(0, true);
     this.onChange('start', this.getSnapshot());
   }
@@ -356,6 +350,7 @@ export class VectorCutGame {
     this.timeLeft = this.config.time;
     this.stageCuts = 0;
     this.collisions = 0;
+    this.stageScrapLinks = 0;
     this.dockTimer = 0;
     this.clearTimer = 0;
     this.collisionCooldown = 0;
@@ -384,10 +379,18 @@ export class VectorCutGame {
     };
     const centered = poly.map(p => ({ x: p.x - centroid.x, y: p.y - centroid.y }));
     this.initialArea = polygonArea(centered);
+    const massNodes = (this.config.massNodes || []).map((node, index) => ({
+      id: index,
+      x: node.x * r,
+      y: node.y * r,
+      weight: this.initialArea * node.weight,
+    }));
+    this.initialMass = this.initialArea + massNodes.reduce((sum, node) => sum + node.weight, 0);
     this.massRatio = 1;
     this.body = {
       poly: centered,
       core,
+      massNodes,
       x: 0,
       y: 0,
       vx: this.config.velocity[0] * s,
@@ -419,10 +422,33 @@ export class VectorCutGame {
         gapY: b.y + b.h * this.config.gate.gapY,
         gap: this.config.gate.gap * s,
         width: Math.max(9, 12 * s),
+        requiresSwitch: Boolean(this.config.gate.requiresSwitch),
       };
     } else {
       this.gate = null;
     }
+    const previousSwitchState = resetBody ? [] : this.switches.map(sw => ({ active: sw.active, pulse: sw.pulse }));
+    this.switches = (this.config.switches || []).map((sw, index) => ({
+      id: index,
+      x: b.x + b.w * sw.x,
+      y: b.y + b.h * sw.y,
+      r: sw.r * s,
+      active: previousSwitchState[index]?.active || false,
+      pulse: previousSwitchState[index]?.pulse || 0,
+    }));
+  }
+
+  allSwitchesActive() {
+    return this.switches.length === 0 || this.switches.every(sw => sw.active);
+  }
+
+  objectiveText() {
+    if (this.switches.length) {
+      const active = this.switches.filter(sw => sw.active).length;
+      return `SCRAP LINK ${active}/${this.switches.length}${this.body?.massNodes?.length ? ' · HEAVY MASS' : ''}`;
+    }
+    if (this.body?.massNodes?.length) return 'HEAVY MASS · READ THE RINGS';
+    return 'LESS MASS LOST · FEWER CUTS';
   }
 
   computeRadius(poly = this.body.poly) {
@@ -450,6 +476,7 @@ export class VectorCutGame {
     return {
       state: this.state,
       stageIndex: this.stageIndex,
+      stageCount: STAGES.length,
       stageName: this.config?.name || '',
       stageHint: this.config?.hint || '',
       timeLeft: this.timeLeft,
@@ -458,6 +485,9 @@ export class VectorCutGame {
       stageCuts: this.stageCuts,
       collisions: this.collisions,
       massRatio: this.massRatio,
+      switchesActive: this.switches.filter(sw => sw.active).length,
+      switchesTotal: this.switches.length,
+      objective: this.objectiveText(),
       speed: this.body ? hypot(this.body.vx, this.body.vy) : 0,
       angular: this.body?.av || 0,
       docking: this.dockTimer,
@@ -548,10 +578,24 @@ export class VectorCutGame {
     const oldArea = polygonArea(this.body.poly);
     const keepArea = polygonArea(keep);
     const discardArea = polygonArea(discard);
-    const discardFraction = discardArea / oldArea;
-    const remainingStageMass = keepArea / this.initialArea;
+    const geometryDiscardFraction = discardArea / oldArea;
+    const keepNodes = [];
+    const discardNodes = [];
+    for (const node of this.body.massNodes || []) {
+      const side = lineSide(node, a, b);
+      const stays = corePositive ? side >= 0 : side <= 0;
+      (stays ? keepNodes : discardNodes).push({ ...node });
+    }
+    const oldNodeMass = (this.body.massNodes || []).reduce((sum, node) => sum + node.weight, 0);
+    const keepNodeMass = keepNodes.reduce((sum, node) => sum + node.weight, 0);
+    const discardNodeMass = discardNodes.reduce((sum, node) => sum + node.weight, 0);
+    const oldMass = oldArea + oldNodeMass;
+    const keepMass = keepArea + keepNodeMass;
+    const discardMass = discardArea + discardNodeMass;
+    const discardFraction = discardMass / oldMass;
+    const remainingStageMass = keepMass / this.initialMass;
 
-    if (discardFraction < 0.025) {
+    if (geometryDiscardFraction < 0.018 && discardFraction < 0.055) {
       return { valid: false, reason: 'SLIVER', title: 'CUT TOO THIN', detail: 'もっと意味のある量を切り落とす' };
     }
     if (remainingStageMass < 0.25) {
@@ -580,9 +624,16 @@ export class VectorCutGame {
       discard,
       keepArea,
       discardArea,
+      keepMass,
+      discardMass,
+      keepNodes,
+      discardNodes,
+      keepNodeMass,
+      discardNodeMass,
       keepCentroid,
       discardCentroid,
       discardFraction,
+      geometryDiscardFraction,
       remainingStageMass,
       impulseLocal,
       torque,
@@ -591,34 +642,53 @@ export class VectorCutGame {
     };
   }
 
-  applyCut(cut) {
-    const old = {
-      x: this.body.x,
-      y: this.body.y,
-      vx: this.body.vx,
-      vy: this.body.vy,
-      angle: this.body.angle,
-      av: this.body.av,
-    };
+  predictCut(cut) {
+    const old = this.body;
     const keepShiftWorld = rotatePoint(cut.keepCentroid, old.angle);
     const discardShiftWorld = rotatePoint(cut.discardCentroid, old.angle);
     const impulseWorld = rotatePoint(cut.impulseLocal, old.angle);
+    const massRatio = cut.discardMass / Math.max(1, cut.keepMass);
+    const scrapKick = clamp(0.45 / Math.max(0.12, massRatio), 0.6, 2.5);
+    return {
+      bodyX: old.x + keepShiftWorld.x,
+      bodyY: old.y + keepShiftWorld.y,
+      bodyVx: old.vx + impulseWorld.x,
+      bodyVy: old.vy + impulseWorld.y,
+      bodyAngle: old.angle,
+      bodyAv: clamp(old.av + cut.torque, -2.2, 2.2),
+      scrapX: old.x + discardShiftWorld.x,
+      scrapY: old.y + discardShiftWorld.y,
+      scrapVx: old.vx - impulseWorld.x * scrapKick,
+      scrapVy: old.vy - impulseWorld.y * scrapKick,
+      scrapAngle: old.angle,
+      scrapAv: old.av - cut.torque * 0.8,
+    };
+  }
 
+  applyCut(cut) {
+    const predicted = this.predictCut(cut);
     const discardPoly = cut.discard.map(p => ({
       x: p.x - cut.discardCentroid.x,
       y: p.y - cut.discardCentroid.y,
     }));
-    const massRatio = cut.discardArea / Math.max(1, cut.keepArea);
+    const discardNodes = cut.discardNodes.map(node => ({
+      ...node,
+      x: node.x - cut.discardCentroid.x,
+      y: node.y - cut.discardCentroid.y,
+    }));
     this.fragments.push({
       poly: discardPoly,
-      x: old.x + discardShiftWorld.x,
-      y: old.y + discardShiftWorld.y,
-      vx: old.vx - impulseWorld.x * clamp(0.45 / Math.max(0.12, massRatio), 0.6, 2.5),
-      vy: old.vy - impulseWorld.y * clamp(0.45 / Math.max(0.12, massRatio), 0.6, 2.5),
-      angle: old.angle,
-      av: old.av - cut.torque * 0.8,
+      nodes: discardNodes,
+      mass: cut.discardMass,
+      x: predicted.scrapX,
+      y: predicted.scrapY,
+      vx: predicted.scrapVx,
+      vy: predicted.scrapVy,
+      angle: predicted.scrapAngle,
+      av: predicted.scrapAv,
+      radius: this.computeRadius(discardPoly),
       t: 0,
-      life: 2.6,
+      life: 12,
     });
 
     this.body.poly = cut.keep.map(p => ({
@@ -629,13 +699,18 @@ export class VectorCutGame {
       x: this.body.core.x - cut.keepCentroid.x,
       y: this.body.core.y - cut.keepCentroid.y,
     };
-    this.body.x = old.x + keepShiftWorld.x;
-    this.body.y = old.y + keepShiftWorld.y;
-    this.body.vx = old.vx + impulseWorld.x;
-    this.body.vy = old.vy + impulseWorld.y;
-    this.body.av = clamp(old.av + cut.torque, -2.2, 2.2);
+    this.body.massNodes = cut.keepNodes.map(node => ({
+      ...node,
+      x: node.x - cut.keepCentroid.x,
+      y: node.y - cut.keepCentroid.y,
+    }));
+    this.body.x = predicted.bodyX;
+    this.body.y = predicted.bodyY;
+    this.body.vx = predicted.bodyVx;
+    this.body.vy = predicted.bodyVy;
+    this.body.av = predicted.bodyAv;
     this.body.radius = this.computeRadius();
-    this.massRatio = cut.keepArea / this.initialArea;
+    this.massRatio = cut.keepMass / this.initialMass;
     this.stageCuts += 1;
     this.totalCuts += 1;
     this.dockTimer = 0;
@@ -643,7 +718,8 @@ export class VectorCutGame {
     this.audio.cut(cut.discardFraction);
     this.onFx('cut');
     const turn = Math.abs(cut.torque) < 0.035 ? 'STRAIGHT' : cut.torque > 0 ? 'CCW' : 'CW';
-    this.onToast(`CUT ${Math.round(cut.discardFraction * 100)}% · ${turn}`, `MASS ${Math.round(this.massRatio * 100)}%`);
+    const dense = cut.discardNodeMass > 0 ? ' · HEAVY' : '';
+    this.onToast(`CUT ${Math.round(cut.discardFraction * 100)}% MASS · ${turn}${dense}`, `HULL MASS ${Math.round(this.massRatio * 100)}%`);
     this.emitCutSparks(cut.intersections);
     this.onChange('hud', this.getSnapshot());
   }
@@ -696,8 +772,9 @@ export class VectorCutGame {
 
     this.resolveBounds();
     if (this.gate) this.resolveGate();
-    this.updateDock(dt);
     this.updateFragments(dt);
+    this.updateSwitches(dt);
+    this.updateDock(dt);
     this.updateSparks(dt);
 
     if (this.hudTimer >= 0.12) {
@@ -741,8 +818,9 @@ export class VectorCutGame {
   resolveGate() {
     const g = this.gate;
     const verts = this.worldVertices();
-    const topEnd = g.gapY - g.gap * 0.5;
-    const bottomStart = g.gapY + g.gap * 0.5;
+    const locked = g.requiresSwitch && !this.allSwitchesActive();
+    const topEnd = locked ? this.playRect().y + this.playRect().h : g.gapY - g.gap * 0.5;
+    const bottomStart = locked ? this.playRect().y + this.playRect().h : g.gapY + g.gap * 0.5;
     const left = g.x - g.width * 0.5;
     const right = g.x + g.width * 0.5;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -786,12 +864,13 @@ export class VectorCutGame {
       Math.abs(angleDelta(this.body.angle, this.goal.targetAngle)) <= this.goal.angleTolerance;
     const core = this.coreWorld();
     const coreInside = hypot(core.x - this.goal.x, core.y - this.goal.y) <= this.goal.r * 0.62;
-    return { fits, slow, angleOk, coreInside, speed };
+    const switchOk = this.allSwitchesActive();
+    return { fits, slow, angleOk, coreInside, switchOk, speed };
   }
 
   updateDock(dt) {
     const s = this.dockingStatus();
-    if (s.fits && s.slow && s.angleOk && s.coreInside) {
+    if (s.fits && s.slow && s.angleOk && s.coreInside && s.switchOk) {
       this.dockTimer += dt;
       if (this.dockTimer >= 0.72) this.clearStage();
     } else {
@@ -846,15 +925,44 @@ export class VectorCutGame {
   }
 
   updateFragments(dt) {
+    const box = this.playRect();
     for (const f of this.fragments) {
       f.t += dt;
       f.x += f.vx * dt;
       f.y += f.vy * dt;
       f.angle += f.av * dt;
-      f.vx *= Math.pow(0.994, dt * 60);
-      f.vy *= Math.pow(0.994, dt * 60);
+      f.vx *= Math.pow(0.997, dt * 60);
+      f.vy *= Math.pow(0.997, dt * 60);
+      f.av *= Math.pow(0.998, dt * 60);
+      const r = Math.max(7, f.radius * 0.38);
+      if (f.x - r < box.x) { f.x = box.x + r; f.vx = Math.abs(f.vx) * 0.58; }
+      if (f.x + r > box.x + box.w) { f.x = box.x + box.w - r; f.vx = -Math.abs(f.vx) * 0.58; }
+      if (f.y - r < box.y) { f.y = box.y + r; f.vy = Math.abs(f.vy) * 0.58; }
+      if (f.y + r > box.y + box.h) { f.y = box.y + box.h - r; f.vy = -Math.abs(f.vy) * 0.58; }
+      for (const sw of this.switches) {
+        if (sw.active) continue;
+        const reach = sw.r + Math.min(28, r);
+        const speed = hypot(f.vx, f.vy);
+        if (speed > 10 && hypot(f.x - sw.x, f.y - sw.y) <= reach) {
+          sw.active = true;
+          sw.pulse = 1;
+          this.stageScrapLinks += 1;
+          this.totalScrapLinks += 1;
+          this.score += 320;
+          f.vx *= -0.34;
+          f.vy *= -0.34;
+          this.audio.switchHit();
+          this.onFx('switch');
+          this.onToast('SCRAP LINK', '+320 · CUT片が回路を起動');
+          this.onChange('hud', this.getSnapshot());
+        }
+      }
     }
     this.fragments = this.fragments.filter(f => f.t < f.life);
+  }
+
+  updateSwitches(dt) {
+    for (const sw of this.switches) sw.pulse = Math.max(0, sw.pulse - dt * 1.8);
   }
 
   updateSparks(dt) {
@@ -890,6 +998,7 @@ export class VectorCutGame {
       return;
     }
     this.drawGoal(ctx);
+    this.drawSwitches(ctx);
     this.drawGate(ctx);
     this.drawFragments(ctx);
     this.drawBody(ctx);
@@ -975,6 +1084,7 @@ export class VectorCutGame {
     if (!s.slow) labels.push('BRAKE');
     if (!s.angleOk) labels.push('ALIGN');
     if (!s.coreInside) labels.push('CORE');
+    if (!s.switchOk) labels.push('SWITCH');
     ctx.fillStyle = labels.length ? 'rgba(166,190,174,.68)' : '#9ff7c1';
     ctx.font = '800 8px ui-monospace, monospace';
     ctx.textAlign = 'center';
@@ -989,14 +1099,46 @@ export class VectorCutGame {
     ctx.restore();
   }
 
+  drawSwitches(ctx) {
+    if (!this.switches.length) return;
+    for (const sw of this.switches) {
+      const pulse = sw.active ? 1 : 0.62 + Math.sin(this.globalTime * 4 + sw.id) * 0.18;
+      ctx.save();
+      ctx.translate(sw.x, sw.y);
+      ctx.strokeStyle = sw.active ? '#83f0b2' : `rgba(255,124,99,${pulse})`;
+      ctx.fillStyle = sw.active ? 'rgba(131,240,178,.16)' : 'rgba(255,118,95,.10)';
+      ctx.lineWidth = sw.active ? 3 : 2;
+      ctx.shadowColor = sw.active ? '#83f0b2' : '#ff765f';
+      ctx.shadowBlur = 10 + sw.pulse * 18;
+      ctx.beginPath();
+      ctx.arc(0, 0, sw.r, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.setLineDash([3, 4]);
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      ctx.arc(0, 0, sw.r * 0.58, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = sw.active ? '#b9ffd1' : '#ffad98';
+      ctx.font = '800 7px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(sw.active ? 'LINKED' : 'SCRAP', 0, sw.r + 13);
+      ctx.restore();
+    }
+  }
+
   drawGate(ctx) {
     if (!this.gate) return;
     const g = this.gate;
     const box = this.playRect();
-    const topEnd = g.gapY - g.gap * 0.5;
-    const bottomStart = g.gapY + g.gap * 0.5;
+    const locked = g.requiresSwitch && !this.allSwitchesActive();
+    const topEnd = locked ? box.y + box.h : g.gapY - g.gap * 0.5;
+    const bottomStart = locked ? box.y + box.h : g.gapY + g.gap * 0.5;
     ctx.save();
-    ctx.fillStyle = 'rgba(226,226,208,.12)';
+    ctx.fillStyle = locked ? 'rgba(255,118,95,.14)' : 'rgba(226,226,208,.12)';
     ctx.strokeStyle = 'rgba(241,183,115,.34)';
     ctx.lineWidth = 1;
     ctx.fillRect(g.x - g.width * 0.5, box.y, g.width, topEnd - box.y);
@@ -1006,7 +1148,7 @@ export class VectorCutGame {
     ctx.fillStyle = 'rgba(244,190,123,.72)';
     ctx.font = '800 7px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('CLEARANCE', g.x, topEnd - 8);
+    ctx.fillText(locked ? 'SWITCH LOCK' : 'CLEARANCE', g.x, Math.max(box.y + 12, topEnd - 8));
     ctx.restore();
   }
 
@@ -1034,6 +1176,21 @@ export class VectorCutGame {
     ctx.fill();
     ctx.stroke();
     ctx.shadowBlur = 0;
+
+    for (const node of body.massNodes || []) {
+      const massScale = clamp(node.weight / Math.max(1, this.initialArea), 0.05, 0.22);
+      const rr = 5 + massScale * 30;
+      ctx.fillStyle = 'rgba(255,180,95,.10)';
+      ctx.strokeStyle = 'rgba(255,190,112,.72)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, rr, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, rr * 0.58, 0, TAU);
+      ctx.stroke();
+    }
 
     for (let i = 0; i < body.poly.length; i += 2) {
       const p = body.poly[i];
@@ -1084,17 +1241,28 @@ export class VectorCutGame {
 
   drawFragments(ctx) {
     for (const f of this.fragments) {
-      const alpha = clamp(1 - f.t / f.life, 0, 1);
+      const fadeStart = 8;
+      const alpha = f.t <= fadeStart ? 1 : clamp(1 - (f.t - fadeStart) / Math.max(0.1, f.life - fadeStart), 0, 1);
       ctx.save();
-      ctx.globalAlpha = alpha * 0.6;
+      ctx.globalAlpha = alpha * 0.78;
       ctx.translate(f.x, f.y);
       ctx.rotate(f.angle);
-      ctx.fillStyle = 'rgba(255,104,88,.16)';
+      ctx.fillStyle = 'rgba(255,104,88,.17)';
       ctx.strokeStyle = '#ff7d68';
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.3;
       this.tracePolygon(ctx, f.poly);
       ctx.fill();
       ctx.stroke();
+      for (const node of f.nodes || []) {
+        ctx.strokeStyle = '#ffc070';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 7, 0, TAU);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, 3.5, 0, TAU);
+        ctx.stroke();
+      }
       ctx.restore();
     }
   }
@@ -1166,6 +1334,37 @@ export class VectorCutGame {
         ctx.textAlign = 'center';
         ctx.fillText(p.torque > 0 ? '↺ CCW' : '↻ CW', this.body.x, this.body.y - this.body.radius - 18);
       }
+
+      const predicted = this.predictCut(p);
+      ctx.save();
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 5]);
+      ctx.strokeStyle = 'rgba(131,240,178,.62)';
+      ctx.beginPath();
+      ctx.moveTo(predicted.bodyX, predicted.bodyY);
+      for (const t of [0.25, 0.5, 0.75, 1.0]) {
+        ctx.lineTo(predicted.bodyX + predicted.bodyVx * t, predicted.bodyY + predicted.bodyVy * t);
+      }
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,118,95,.62)';
+      ctx.beginPath();
+      ctx.moveTo(predicted.scrapX, predicted.scrapY);
+      for (const t of [0.25, 0.5, 0.75, 1.0]) {
+        ctx.lineTo(predicted.scrapX + predicted.scrapVx * t, predicted.scrapY + predicted.scrapVy * t);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const t of [0.35, 0.7, 1.0]) {
+        ctx.fillStyle = 'rgba(131,240,178,.78)';
+        ctx.beginPath();
+        ctx.arc(predicted.bodyX + predicted.bodyVx * t, predicted.bodyY + predicted.bodyVy * t, 2.2, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255,118,95,.78)';
+        ctx.beginPath();
+        ctx.arc(predicted.scrapX + predicted.scrapVx * t, predicted.scrapY + predicted.scrapVy * t, 2.2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     ctx.save();

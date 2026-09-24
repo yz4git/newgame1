@@ -199,3 +199,30 @@ Negative:
 13. pointerがcanvas外へ少し出てもPointer Captureでgestureが破綻しないか。
 14. blur / browser chromeによる勝手なpauseが起きないか。
 15. failure→retryに長い待ち時間がないか。
+
+## v1.1 — Scrap Is A Tool
+
+### 破片の第二用途
+従来はCUT後の赤い破片が主に演出だった。v1.1では同じ破片を物理オブジェクトとして一定時間残し、SCRAP SWITCHへ当てることで回路を起動できる。
+
+一つのCUTが同時に二つの結果を作る。
+
+- retained hull: 自機の速度・回転・形状を変える
+- discarded scrap: 反対方向へ飛び、離れた仕掛けへ作用する
+
+これにより「自機を右へ動かす」と「破片を左へ飛ばす」を一本の線で同時に設計する判断が生まれる。
+
+### Planning horizon
+CUT commit前に、緑の自機軌道と赤の切断片軌道を約1秒先まで表示する。
+正解線を直接表示するのではなく、現在の入力が作る未来状態を短く可視化して、反射から計画へ移す。
+
+### Visible mass density
+二重リングの高密度材は追加質量を持つ。面積だけでなく、どの高密度材を切り捨てるかで反動量が変わる。
+隠し補正にはせず、重量差を船体内の視覚文法として常時表示する。
+
+### Learning sequence extension
+6. SCRAP LINK — 切断片の第二用途を単独導入
+7. HEAVY VECTOR — 質量分布を単独導入
+8. TWIN PURPOSE — scrap / heavy mass / switch-locked gate / angle lockを統合
+
+追加buttonや別操作modeは導入しない。同じ一本のdragに新しい判断を重ねる。

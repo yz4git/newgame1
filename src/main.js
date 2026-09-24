@@ -15,6 +15,7 @@ const chamberHint = $('chamberHint');
 const massValue = $('massValue');
 const cutsValue = $('cutsValue');
 const scoreValue = $('scoreValue');
+const objectiveValue = $('objectiveValue');
 const timeValue = $('timeValue');
 const speedValue = $('speedValue');
 const spinValue = $('spinValue');
@@ -70,13 +71,14 @@ window.visualViewport?.addEventListener('resize', () => {
 }, { passive: true });
 
 function syncHud(snapshot = game.getSnapshot()) {
-  chamberNumber.textContent = `CHAMBER ${String(snapshot.stageIndex + 1).padStart(2, '0')} / 05`;
+  chamberNumber.textContent = `CHAMBER ${String(snapshot.stageIndex + 1).padStart(2, '0')} / ${String(snapshot.stageCount).padStart(2, '0')}`;
   chamberName.textContent = snapshot.stageName;
   chamberHint.textContent = snapshot.stageHint;
   massValue.textContent = `${Math.round(snapshot.massRatio * 100)}%`;
   massValue.classList.toggle('danger', snapshot.massRatio < 0.4);
   cutsValue.textContent = String(snapshot.totalCuts).padStart(2, '0');
   scoreValue.textContent = String(snapshot.score).padStart(6, '0');
+  objectiveValue.textContent = snapshot.objective || 'LESS MASS LOST · FEWER CUTS';
   timeValue.textContent = Math.ceil(snapshot.timeLeft).toString().padStart(2, '0');
   timeValue.classList.toggle('danger', snapshot.timeLeft <= 10);
   speedValue.textContent = Math.round(snapshot.speed).toString().padStart(3, '0');
@@ -116,7 +118,7 @@ function setState(state, detail = {}) {
     $('resultEyebrow').textContent = victory ? 'FABRICATION RUN COMPLETE' : `VECTOR LOST · CHAMBER ${String(game.stageIndex + 1).padStart(2, '0')}`;
     $('resultTitle').textContent = victory ? 'LOCK ACHIEVED' : 'WINDOW EXPIRED';
     $('resultSubtitle').textContent = victory
-      ? '切断だけで速度・回転・形を整え、全ドックへ到達した。'
+      ? 'CUT反動・切断片・質量差を使い分け、全ドックへ到達した。'
       : '反動を大きくしすぎた。小さいCUTと逆向きCUTで速度を先に整える。';
     $('resultScore').textContent = String(game.score).padStart(6, '0');
     $('resultCuts').textContent = String(game.totalCuts);
@@ -159,6 +161,7 @@ game.setFxCallback((type) => {
   if (type === 'cut') navigator.vibrate(10);
   else if (type === 'dock') navigator.vibrate([10, 35, 18]);
   else if (type === 'contact') navigator.vibrate(7);
+  else if (type === 'switch') navigator.vibrate([8, 24, 12]);
 });
 
 const records = game.getRecords();

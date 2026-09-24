@@ -1,7 +1,7 @@
 {
   "name": "VECTOR CUT — Shape the Drift",
   "short_name": "VECTOR CUT",
-  "description": "船体を指で切り、切り落とした質量の反動だけで速度と回転を操ってドックへ到達する無重力アクション。",
+  "description": "船体を切った反動で進み、切断片を仕掛けへ飛ばし、高密度材の質量差まで利用する無重力アクション。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,6 +9,11 @@
   "background_color": "#070809",
   "theme_color": "#070809",
   "icons": [
-    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }
