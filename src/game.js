@@ -1,56 +1,173 @@
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
-const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
+const hypot = (x, y) => Math.hypot(x, y);
+const cross = (ax, ay, bx, by) => ax * by - ay * bx;
 
-const SPECIES = {
-  drift: { name: 'DRIFTER', color: '#74e8ff', reveal: 1.35, points: 120, radius: 15, scans: 1 },
-  skitter: { name: 'SKITTER', color: '#ffcc7a', reveal: 1.0, points: 170, radius: 14, scans: 1 },
-  deep: { name: 'DEEP ECHO', color: '#cf9cff', reveal: 1.25, points: 240, radius: 17, scans: 2 },
-};
-
-const DIVES = [
+const STAGES = [
   {
-    name: 'SHALLOW LISTEN',
-    hint: '暗い水をタップしてPING。浮かんだ輪郭を直接タップ',
-    time: 42,
-    target: 5,
-    count: 7,
-    species: ['drift'],
-    speed: [9, 18],
-    vents: 0,
-  },
-  {
-    name: 'MOVING WATER',
-    hint: '輪郭の短い軌跡から、次にいる場所を読む',
+    name: 'FIRST RECOIL',
+    hint: '船体を横切るようにドラッグ。切り落とした側と逆へ反動する',
     time: 48,
-    target: 6,
-    count: 9,
-    species: ['drift', 'skitter'],
-    speed: [14, 27],
-    vents: 0,
+    start: [0.24, 0.52],
+    goal: [0.78, 0.52],
+    velocity: [0, 0],
+    angular: 0,
+    goalRadius: 88,
+    maxSpeed: 48,
+    targetAngle: null,
+    gate: null,
+    core: [0, 0],
   },
   {
-    name: 'THERMAL NOISE',
-    hint: '熱水域は偽反響を増やす。PINGする場所を選ぶ',
-    time: 52,
-    target: 7,
-    count: 11,
-    species: ['drift', 'skitter'],
-    speed: [16, 31],
-    vents: 2,
+    name: 'BRAKE VECTOR',
+    hint: '進みすぎる時は、進行方向側を切って逆向きの反動を作る',
+    time: 50,
+    start: [0.20, 0.44],
+    goal: [0.79, 0.58],
+    velocity: [74, 12],
+    angular: 0,
+    goalRadius: 84,
+    maxSpeed: 42,
+    targetAngle: null,
+    gate: null,
+    core: [6, -3],
   },
   {
-    name: 'BLACK CHOIR',
-    hint: '紫のDEEP ECHOは短時間に2回反響させてから記録',
-    time: 58,
-    target: 8,
-    count: 13,
-    species: ['drift', 'skitter', 'deep'],
-    speed: [16, 34],
-    vents: 2,
+    name: 'COUNTERSPIN',
+    hint: '重心から外れたCUTは回転も生む。反動矢印とCW/CCWを読む',
+    time: 56,
+    start: [0.24, 0.60],
+    goal: [0.77, 0.40],
+    velocity: [12, -6],
+    angular: 0.62,
+    goalRadius: 82,
+    maxSpeed: 40,
+    targetAngle: 0,
+    angleTolerance: 0.34,
+    gate: null,
+    core: [-8, 5],
+  },
+  {
+    name: 'NARROW GATE',
+    hint: '壁の隙間に合わせて船体を削る。形そのものが通行条件になる',
+    time: 62,
+    start: [0.20, 0.50],
+    goal: [0.82, 0.50],
+    velocity: [18, 0],
+    angular: 0.08,
+    goalRadius: 78,
+    maxSpeed: 42,
+    targetAngle: null,
+    gate: { x: 0.56, gapY: 0.50, gap: 126 },
+    core: [5, 0],
+  },
+  {
+    name: 'VECTOR LOCK',
+    hint: '質量・速度・回転・ゲートを一度に整え、縦向きでLOCKする',
+    time: 70,
+    start: [0.18, 0.66],
+    goal: [0.82, 0.34],
+    velocity: [36, -18],
+    angular: -0.48,
+    goalRadius: 74,
+    maxSpeed: 36,
+    targetAngle: Math.PI / 2,
+    angleTolerance: 0.28,
+    gate: { x: 0.55, gapY: 0.47, gap: 116 },
+    core: [-10, 7],
   },
 ];
+
+function rotatePoint(p, angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c };
+}
+
+function inverseRotatePoint(p, angle) {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return { x: p.x * c + p.y * s, y: -p.x * s + p.y * c };
+}
+
+function polygonArea(poly) {
+  let sum = 0;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(sum) * 0.5;
+}
+
+function polygonCentroid(poly) {
+  let twiceArea = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < poly.length; i += 1) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const f = a.x * b.y - b.x * a.y;
+    twiceArea += f;
+    cx += (a.x + b.x) * f;
+    cy += (a.y + b.y) * f;
+  }
+  if (Math.abs(twiceArea) < 1e-6) {
+    const avg = poly.reduce((o, p) => ({ x: o.x + p.x, y: o.y + p.y }), { x: 0, y: 0 });
+    return { x: avg.x / poly.length, y: avg.y / poly.length };
+  }
+  return { x: cx / (3 * twiceArea), y: cy / (3 * twiceArea) };
+}
+
+function lineSide(p, a, b) {
+  return cross(b.x - a.x, b.y - a.y, p.x - a.x, p.y - a.y);
+}
+
+function clipHalfPlane(poly, a, b, positive) {
+  const out = [];
+  const inside = (v) => positive ? v >= -1e-6 : v <= 1e-6;
+  for (let i = 0; i < poly.length; i += 1) {
+    const s = poly[i];
+    const e = poly[(i + 1) % poly.length];
+    const ds = lineSide(s, a, b);
+    const de = lineSide(e, a, b);
+    const sin = inside(ds);
+    const ein = inside(de);
+    if (sin && ein) {
+      out.push({ ...e });
+    } else if (sin && !ein) {
+      const t = ds / (ds - de);
+      out.push({ x: s.x + (e.x - s.x) * t, y: s.y + (e.y - s.y) * t });
+    } else if (!sin && ein) {
+      const t = ds / (ds - de);
+      out.push({ x: s.x + (e.x - s.x) * t, y: s.y + (e.y - s.y) * t });
+      out.push({ ...e });
+    }
+  }
+  return out;
+}
+
+function segmentIntersection(a, b, c, d) {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const den = cross(rx, ry, sx, sy);
+  if (Math.abs(den) < 1e-7) return null;
+  const qpx = c.x - a.x;
+  const qpy = c.y - a.y;
+  const t = cross(qpx, qpy, sx, sy) / den;
+  const u = cross(qpx, qpy, rx, ry) / den;
+  if (t < -1e-5 || t > 1 + 1e-5 || u < -1e-5 || u > 1 + 1e-5) return null;
+  return { x: a.x + rx * t, y: a.y + ry * t, t };
+}
+
+function angleDelta(a, b) {
+  let d = (a - b + Math.PI) % TAU;
+  if (d < 0) d += TAU;
+  return d - Math.PI;
+}
 
 class AudioBus {
   constructor() {
@@ -74,14 +191,14 @@ class AudioBus {
     else this.ctx?.suspend?.().catch(() => {});
   }
 
-  tone(freq, duration = 0.08, type = 'sine', gain = 0.025, endFreq = null, delay = 0) {
+  tone(freq, duration = 0.08, type = 'sine', gain = 0.022, endFreq = null, delay = 0) {
     if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
     const now = this.ctx.currentTime + delay;
     const osc = this.ctx.createOscillator();
     const amp = this.ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, now);
-    if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(25, endFreq), now + duration);
+    if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(30, endFreq), now + duration);
     amp.gain.setValueAtTime(0.0001, now);
     amp.gain.exponentialRampToValueAtTime(gain, now + 0.008);
     amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
@@ -90,31 +207,25 @@ class AudioBus {
     osc.stop(now + duration + 0.03);
   }
 
-  ping(charge) {
-    this.tone(300 + charge * 28, 0.19, 'sine', 0.026, 690 + charge * 40);
+  cut(size) {
+    this.tone(720 + size * 260, 0.11, 'sawtooth', 0.014, 180);
+    this.tone(150, 0.12, 'triangle', 0.018, 80, 0.025);
   }
 
-  echo(species, distance01) {
-    const base = species === 'deep' ? 390 : species === 'skitter' ? 520 : 660;
-    this.tone(base - distance01 * 110, 0.085, 'triangle', 0.018);
+  invalid() {
+    this.tone(120, 0.07, 'square', 0.012, 92);
   }
 
-  capture(species, streak) {
-    const base = species === 'deep' ? 560 : species === 'skitter' ? 650 : 740;
-    this.tone(base, 0.12, 'sine', 0.03, base * 1.28);
-    if (streak >= 3) this.tone(base * 1.55, 0.11, 'triangle', 0.016, null, 0.055);
+  contact() {
+    this.tone(95, 0.11, 'triangle', 0.024, 58);
   }
 
-  empty() {
-    this.tone(125, 0.09, 'square', 0.014);
-  }
-
-  clear() {
-    [440, 554, 659].forEach((freq, i) => this.tone(freq, 0.16, 'sine', 0.02, null, i * 0.065));
+  dock() {
+    [392, 523.25, 659.25].forEach((f, i) => this.tone(f, 0.18, 'sine', 0.019, f * 1.02, i * 0.07));
   }
 }
 
-export class AbyssalEchoGame {
+export class VectorCutGame {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d', { alpha: false });
@@ -128,24 +239,26 @@ export class AbyssalEchoGame {
     this.accumulator = 0;
     this.lastFrame = performance.now();
     this.globalTime = 0;
-    this.diveIndex = 0;
+    this.hudTimer = 0;
+    this.stageIndex = 0;
     this.timeLeft = 0;
     this.score = 0;
-    this.streak = 0;
-    this.bestStreakThisRun = 0;
-    this.lastCaptureTime = -99;
-    this.captured = 0;
-    this.pingsUsed = 0;
-    this.charge = 3;
-    this.maxCharge = 3;
-    this.rechargeTimer = 0;
+    this.totalCuts = 0;
+    this.stageCuts = 0;
+    this.collisions = 0;
+    this.totalCollisions = 0;
+    this.massRatio = 1;
+    this.initialArea = 1;
+    this.dockTimer = 0;
     this.clearTimer = 0;
-    this.organisms = [];
-    this.pings = [];
-    this.vents = [];
-    this.fakeEchoes = [];
-    this.particles = [];
-    this.tutorialStep = 0;
+    this.collisionCooldown = 0;
+    this.body = null;
+    this.goal = null;
+    this.gate = null;
+    this.fragments = [];
+    this.sparks = [];
+    this.drag = null;
+    this.preview = null;
     this.records = this.loadRecords();
     this.onChange = () => {};
     this.onToast = () => {};
@@ -156,45 +269,57 @@ export class AbyssalEchoGame {
     requestAnimationFrame(this.frame);
   }
 
-  setOnChange(callback) { this.onChange = callback || (() => {}); }
-  setToastCallback(callback) { this.onToast = callback || (() => {}); }
-  setFxCallback(callback) { this.onFx = callback || (() => {}); }
-  setAudioEnabled(value) { this.audio.setEnabled(value); }
+  get config() { return STAGES[this.stageIndex]; }
+  setOnChange(fn) { this.onChange = fn || (() => {}); }
+  setToastCallback(fn) { this.onToast = fn || (() => {}); }
+  setFxCallback(fn) { this.onFx = fn || (() => {}); }
+  setAudioEnabled(v) { this.audio.setEnabled(v); }
   getRecords() { return { ...this.records }; }
-  get config() { return DIVES[this.diveIndex]; }
 
   loadRecords() {
     try {
-      const parsed = JSON.parse(localStorage.getItem('abyssalEchoRecordsV1') || '{}');
+      const v = JSON.parse(localStorage.getItem('vectorCutRecordsV1') || '{}');
       return {
-        bestScore: Number(parsed.bestScore) || 0,
-        bestStreak: Number(parsed.bestStreak) || 0,
-        clears: Number(parsed.clears) || 0,
+        bestScore: Number(v.bestScore) || 0,
+        fewestCuts: Number(v.fewestCuts) || 0,
+        bestMass: Number(v.bestMass) || 0,
+        clears: Number(v.clears) || 0,
       };
     } catch {
-      return { bestScore: 0, bestStreak: 0, clears: 0 };
+      return { bestScore: 0, fewestCuts: 0, bestMass: 0, clears: 0 };
     }
   }
 
   saveRecords() {
-    try { localStorage.setItem('abyssalEchoRecordsV1', JSON.stringify(this.records)); } catch { /* optional */ }
+    try { localStorage.setItem('vectorCutRecordsV1', JSON.stringify(this.records)); } catch { /* optional */ }
   }
 
   resize() {
-    const rect = this.canvas.getBoundingClientRect();
+    const r = this.canvas.getBoundingClientRect();
     this.dpr = Math.min(window.devicePixelRatio || 1, 1.8);
-    this.width = Math.max(1, rect.width);
-    this.height = Math.max(1, rect.height);
+    this.width = Math.max(1, r.width);
+    this.height = Math.max(1, r.height);
     this.canvas.width = Math.round(this.width * this.dpr);
     this.canvas.height = Math.round(this.height * this.dpr);
+    if (this.state === 'playing' && this.body) {
+      const b = this.playRect();
+      this.body.x = clamp(this.body.x, b.x + 40, b.x + b.w - 40);
+      this.body.y = clamp(this.body.y, b.y + 40, b.y + b.h - 40);
+      this.placeStageGeometry(false);
+    }
   }
 
   playRect() {
-    const landscape = this.width / this.height > 1.15;
-    const x = landscape ? Math.max(38, this.width * 0.055) : Math.max(22, this.width * 0.055);
-    const top = landscape ? Math.max(90, this.height * 0.18) : Math.max(112, this.height * 0.17);
-    const bottom = landscape ? Math.max(78, this.height * 0.16) : Math.max(92, this.height * 0.14);
-    return { x, y: top, w: this.width - x * 2, h: Math.max(160, this.height - top - bottom) };
+    const landscape = this.width / this.height > 1.08;
+    const marginX = landscape ? Math.max(36, this.width * 0.045) : Math.max(20, this.width * 0.05);
+    const top = landscape ? Math.max(84, this.height * 0.16) : Math.max(112, this.height * 0.15);
+    const bottom = landscape ? Math.max(70, this.height * 0.14) : Math.max(92, this.height * 0.12);
+    return { x: marginX, y: top, w: this.width - marginX * 2, h: Math.max(180, this.height - top - bottom) };
+  }
+
+  scaleFactor() {
+    const b = this.playRect();
+    return clamp(Math.min(b.w, b.h) / 430, 0.72, 1.08);
   }
 
   start() {
@@ -202,12 +327,9 @@ export class AbyssalEchoGame {
     this.state = 'playing';
     this.paused = false;
     this.score = 0;
-    this.streak = 0;
-    this.bestStreakThisRun = 0;
-    this.lastCaptureTime = -99;
-    this.pingsUsed = 0;
-    this.tutorialStep = 0;
-    this.startDive(0, true);
+    this.totalCuts = 0;
+    this.totalCollisions = 0;
+    this.startStage(0, true);
     this.onChange('start', this.getSnapshot());
   }
 
@@ -216,348 +338,540 @@ export class AbyssalEchoGame {
   returnToTitle() {
     this.state = 'title';
     this.paused = false;
-    this.organisms.length = 0;
-    this.pings.length = 0;
+    this.drag = null;
+    this.preview = null;
     this.onChange('title');
   }
 
-  setPaused(value) {
+  setPaused(v) {
     if (this.state !== 'playing') return;
-    this.paused = value;
-    this.onChange(value ? 'pause' : 'resume', this.getSnapshot());
+    this.paused = v;
+    this.drag = null;
+    this.preview = null;
+    this.onChange(v ? 'pause' : 'resume', this.getSnapshot());
   }
 
-  startDive(index, first = false) {
-    this.diveIndex = index;
+  startStage(index, first = false) {
+    this.stageIndex = index;
     this.timeLeft = this.config.time;
-    this.captured = 0;
+    this.stageCuts = 0;
+    this.collisions = 0;
+    this.dockTimer = 0;
     this.clearTimer = 0;
-    this.charge = this.maxCharge;
-    this.rechargeTimer = 0;
-    this.pings.length = 0;
-    this.fakeEchoes.length = 0;
-    this.particles.length = 0;
-    this.createVents();
-    this.createOrganisms();
-    if (!first) this.onToast(`DIVE ${index + 1} · ${this.config.name}`, this.config.hint);
-    this.onChange('dive', this.getSnapshot());
+    this.collisionCooldown = 0;
+    this.fragments = [];
+    this.sparks = [];
+    this.drag = null;
+    this.preview = null;
+    this.makeBody();
+    this.placeStageGeometry(true);
+    if (!first) this.onToast(`CHAMBER ${String(index + 1).padStart(2, '0')} · ${this.config.name}`, this.config.hint);
+    this.onChange('stage', this.getSnapshot());
   }
 
-  createVents() {
-    this.vents = [];
-    const b = this.playRect();
-    const presets = [
-      { x: 0.36, y: 0.39, r: 0.115 },
-      { x: 0.69, y: 0.68, r: 0.13 },
-    ];
-    for (let i = 0; i < this.config.vents; i++) {
-      const p = presets[i];
-      this.vents.push({ x: b.x + b.w * p.x, y: b.y + b.h * p.y, r: Math.min(b.w, b.h) * p.r, phase: i * 1.7 });
-    }
-  }
-
-  createOrganisms() {
-    this.organisms = [];
-    const b = this.playRect();
-    const seed = (this.diveIndex + 1) * 9187 + 137;
-    const rand = this.makeRng(seed);
-    for (let i = 0; i < this.config.count; i++) {
-      const species = this.config.species[Math.floor(rand() * this.config.species.length)];
-      const def = SPECIES[species];
-      const angle = rand() * TAU;
-      const speed = lerp(this.config.speed[0], this.config.speed[1], rand()) * (species === 'skitter' ? 1.08 : species === 'deep' ? 0.78 : 1);
-      let x = b.x + b.w * lerp(0.12, 0.88, rand());
-      let y = b.y + b.h * lerp(0.12, 0.88, rand());
-      for (let tries = 0; tries < 8 && this.vents.some(v => dist(x, y, v.x, v.y) < v.r * 0.85); tries++) {
-        x = b.x + b.w * lerp(0.12, 0.88, rand());
-        y = b.y + b.h * lerp(0.12, 0.88, rand());
-      }
-      this.organisms.push({
-        id: i,
-        species,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        radius: def.radius,
-        revealed: 0,
-        echo: 0,
-        scans: 0,
-        scanMemory: 0,
-        alive: true,
-        phase: rand() * TAU,
-        trail: [],
-        justPinged: 0,
-      });
-    }
-  }
-
-  makeRng(seed) {
-    let value = seed >>> 0;
-    return () => {
-      value += 0x6D2B79F5;
-      let t = value;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  makeBody() {
+    const s = this.scaleFactor();
+    const r = 67 * s;
+    const radii = [1.02, 0.92, 1.07, 0.94, 1.03, 0.91, 1.05, 0.96, 1.00, 0.93];
+    const poly = radii.map((m, i) => {
+      const a = (i / radii.length) * TAU + 0.08;
+      return { x: Math.cos(a) * r * m, y: Math.sin(a) * r * m };
+    });
+    const centroid = polygonCentroid(poly);
+    const core = {
+      x: this.config.core[0] * s - centroid.x,
+      y: this.config.core[1] * s - centroid.y,
     };
+    const centered = poly.map(p => ({ x: p.x - centroid.x, y: p.y - centroid.y }));
+    this.initialArea = polygonArea(centered);
+    this.massRatio = 1;
+    this.body = {
+      poly: centered,
+      core,
+      x: 0,
+      y: 0,
+      vx: this.config.velocity[0] * s,
+      vy: this.config.velocity[1] * s,
+      angle: 0,
+      av: this.config.angular,
+      radius: this.computeRadius(centered),
+    };
+  }
+
+  placeStageGeometry(resetBody) {
+    const b = this.playRect();
+    const s = this.scaleFactor();
+    if (resetBody) {
+      this.body.x = b.x + b.w * this.config.start[0];
+      this.body.y = b.y + b.h * this.config.start[1];
+    }
+    this.goal = {
+      x: b.x + b.w * this.config.goal[0],
+      y: b.y + b.h * this.config.goal[1],
+      r: this.config.goalRadius * s,
+      maxSpeed: this.config.maxSpeed * s,
+      targetAngle: this.config.targetAngle,
+      angleTolerance: this.config.angleTolerance ?? 0,
+    };
+    if (this.config.gate) {
+      this.gate = {
+        x: b.x + b.w * this.config.gate.x,
+        gapY: b.y + b.h * this.config.gate.gapY,
+        gap: this.config.gate.gap * s,
+        width: Math.max(9, 12 * s),
+      };
+    } else {
+      this.gate = null;
+    }
+  }
+
+  computeRadius(poly = this.body.poly) {
+    return poly.reduce((m, p) => Math.max(m, hypot(p.x, p.y)), 0);
+  }
+
+  worldToLocal(x, y) {
+    return inverseRotatePoint({ x: x - this.body.x, y: y - this.body.y }, this.body.angle);
+  }
+
+  localToWorld(p) {
+    const q = rotatePoint(p, this.body.angle);
+    return { x: this.body.x + q.x, y: this.body.y + q.y };
+  }
+
+  worldVertices() {
+    return this.body.poly.map(p => this.localToWorld(p));
+  }
+
+  coreWorld() {
+    return this.localToWorld(this.body.core);
   }
 
   getSnapshot() {
     return {
       state: this.state,
-      paused: this.paused,
-      diveIndex: this.diveIndex,
-      diveName: this.config?.name || '',
-      diveHint: this.config?.hint || '',
+      stageIndex: this.stageIndex,
+      stageName: this.config?.name || '',
+      stageHint: this.config?.hint || '',
       timeLeft: this.timeLeft,
       score: this.score,
-      streak: this.streak,
-      bestStreak: this.bestStreakThisRun,
-      captured: this.captured,
-      target: this.config?.target || 0,
-      charge: this.charge,
-      maxCharge: this.maxCharge,
-      pingsUsed: this.pingsUsed,
+      totalCuts: this.totalCuts,
+      stageCuts: this.stageCuts,
+      collisions: this.collisions,
+      massRatio: this.massRatio,
+      speed: this.body ? hypot(this.body.vx, this.body.vy) : 0,
+      angular: this.body?.av || 0,
+      docking: this.dockTimer,
     };
   }
 
-  handlePointer(clientX, clientY) {
+  pointerDown(clientX, clientY, pointerId = 0) {
     if (this.state !== 'playing' || this.paused || this.clearTimer > 0) return false;
-    const rect = this.canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const r = this.canvas.getBoundingClientRect();
+    const x = clientX - r.left;
+    const y = clientY - r.top;
     const b = this.playRect();
     if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) return false;
-
-    let best = null;
-    for (const organism of this.organisms) {
-      if (!organism.alive || organism.revealed <= 0) continue;
-      const def = SPECIES[organism.species];
-      if (organism.scans < def.scans) continue;
-      const hitRadius = Math.max(30, def.radius + 17);
-      const d = dist(x, y, organism.x, organism.y);
-      if (d <= hitRadius && (!best || d < best.d)) best = { organism, d };
-    }
-    if (best) {
-      this.captureOrganism(best.organism);
-      return true;
-    }
-    return this.firePing(x, y);
-  }
-
-  firePing(x, y) {
-    if (this.charge < 1) {
-      this.audio.empty();
-      this.onToast('SONAR CHARGING', '少し待つとPINGが戻る');
-      this.onFx('empty');
-      return false;
-    }
-    this.charge -= 1;
-    this.pingsUsed += 1;
-    this.rechargeTimer = Math.max(this.rechargeTimer, 0.28);
-    const maxR = Math.min(Math.max(this.width, this.height) * 0.58, 560);
-    this.pings.push({ x, y, r: 3, prevR: 0, speed: 330, maxR, life: 0, alpha: 1 });
-    this.audio.ping(this.charge);
-    this.onFx('ping');
-    if (this.tutorialStep === 0) {
-      this.tutorialStep = 1;
-      this.onToast('PING SENT', '波が輪郭に触れる瞬間を見る');
-    }
-    this.onChange('hud', this.getSnapshot());
+    this.drag = { id: pointerId, start: { x, y }, end: { x, y } };
+    this.preview = null;
     return true;
   }
 
-  captureOrganism(organism) {
-    if (!organism.alive || organism.revealed <= 0) return;
-    const def = SPECIES[organism.species];
-    if (organism.scans < def.scans) return;
-    organism.alive = false;
-    this.captured += 1;
-    if (this.globalTime - this.lastCaptureTime > 4.5) this.streak = 0;
-    this.streak += 1;
-    this.lastCaptureTime = this.globalTime;
-    this.bestStreakThisRun = Math.max(this.bestStreakThisRun, this.streak);
-    const timeBonus = Math.floor(Math.max(0, this.timeLeft) * 1.4);
-    const streakBonus = Math.min(220, (this.streak - 1) * 22);
-    const efficiency = Math.round(this.charge * 18);
-    const points = def.points + streakBonus + efficiency + Math.min(90, timeBonus);
-    this.score += points;
-    this.audio.capture(organism.species, this.streak);
-    this.onFx('capture');
-    this.onToast(this.streak >= 3 ? `SPECIMEN LOGGED · ×${this.streak}` : 'SPECIMEN LOGGED', `${def.name} +${points}`);
-    for (let i = 0; i < 12; i++) {
-      const angle = (i / 12) * TAU + organism.phase;
-      this.particles.push({ x: organism.x, y: organism.y, vx: Math.cos(angle) * (28 + i * 2.1), vy: Math.sin(angle) * (28 + i * 2.1), t: 0, color: def.color });
+  pointerMove(clientX, clientY, pointerId = 0) {
+    if (!this.drag || this.drag.id !== pointerId) return false;
+    const r = this.canvas.getBoundingClientRect();
+    const b = this.playRect();
+    this.drag.end = {
+      x: clamp(clientX - r.left, b.x, b.x + b.w),
+      y: clamp(clientY - r.top, b.y, b.y + b.h),
+    };
+    this.preview = this.analyzeCut(this.drag.start, this.drag.end);
+    return true;
+  }
+
+  pointerUp(clientX, clientY, pointerId = 0) {
+    if (!this.drag || this.drag.id !== pointerId) return false;
+    this.pointerMove(clientX, clientY, pointerId);
+    const result = this.preview || this.analyzeCut(this.drag.start, this.drag.end);
+    this.drag = null;
+    this.preview = null;
+    if (!result.valid) {
+      if (result.reason !== 'SHORT') {
+        this.audio.invalid();
+        this.onFx('invalid');
+        this.onToast(result.title || 'CUT REJECTED', result.detail || '船体を横切るようにドラッグ');
+      }
+      return true;
     }
-    if (this.tutorialStep === 1) {
-      this.tutorialStep = 2;
-      this.onToast('DIRECT TAG', '見えている間は輪郭を直接タップして記録');
+    this.applyCut(result);
+    return true;
+  }
+
+  cancelPointer(pointerId = null) {
+    if (!this.drag || (pointerId !== null && this.drag.id !== pointerId)) return;
+    this.drag = null;
+    this.preview = null;
+  }
+
+  analyzeCut(startWorld, endWorld) {
+    const dragLength = hypot(endWorld.x - startWorld.x, endWorld.y - startWorld.y);
+    if (dragLength < 28) return { valid: false, reason: 'SHORT' };
+
+    const a = this.worldToLocal(startWorld.x, startWorld.y);
+    const b = this.worldToLocal(endWorld.x, endWorld.y);
+    const lineLength = hypot(b.x - a.x, b.y - a.y);
+    if (lineLength < 1) return { valid: false, reason: 'SHORT' };
+
+    const intersections = [];
+    for (let i = 0; i < this.body.poly.length; i += 1) {
+      const p = this.body.poly[i];
+      const q = this.body.poly[(i + 1) % this.body.poly.length];
+      const hit = segmentIntersection(a, b, p, q);
+      if (hit && !intersections.some(h => hypot(h.x - hit.x, h.y - hit.y) < 0.5)) intersections.push(hit);
     }
-    if (this.captured >= this.config.target) this.beginDiveClear();
-    this.onChange('hud', this.getSnapshot());
+    if (intersections.length < 2) {
+      return { valid: false, reason: 'MISS', title: 'NO SECTION', detail: '線を船体の外から外まで通す' };
+    }
+
+    const coreDistance = Math.abs(lineSide(this.body.core, a, b)) / lineLength;
+    const coreSafe = 14 * this.scaleFactor();
+    if (coreDistance < coreSafe) {
+      return { valid: false, reason: 'CORE', title: 'CORE PROTECTED', detail: 'オレンジのコアから少し離して切る' };
+    }
+
+    const corePositive = lineSide(this.body.core, a, b) > 0;
+    const keep = clipHalfPlane(this.body.poly, a, b, corePositive);
+    const discard = clipHalfPlane(this.body.poly, a, b, !corePositive);
+    if (keep.length < 3 || discard.length < 3) {
+      return { valid: false, reason: 'MISS', title: 'NO SECTION', detail: '船体を完全に横切るCUTが必要' };
+    }
+
+    const oldArea = polygonArea(this.body.poly);
+    const keepArea = polygonArea(keep);
+    const discardArea = polygonArea(discard);
+    const discardFraction = discardArea / oldArea;
+    const remainingStageMass = keepArea / this.initialArea;
+
+    if (discardFraction < 0.025) {
+      return { valid: false, reason: 'SLIVER', title: 'CUT TOO THIN', detail: 'もっと意味のある量を切り落とす' };
+    }
+    if (remainingStageMass < 0.25) {
+      return { valid: false, reason: 'MASS', title: 'MINIMUM MASS', detail: 'コアを支える質量を25%以上残す' };
+    }
+
+    const keepCentroid = polygonCentroid(keep);
+    const discardCentroid = polygonCentroid(discard);
+    let dx = keepCentroid.x - discardCentroid.x;
+    let dy = keepCentroid.y - discardCentroid.y;
+    const dl = Math.max(1e-5, hypot(dx, dy));
+    dx /= dl;
+    dy /= dl;
+
+    const impulseMag = (58 + 255 * discardFraction) * this.scaleFactor();
+    const impulseLocal = { x: dx * impulseMag, y: dy * impulseMag };
+    const cutMid = intersections.reduce((o, p) => ({ x: o.x + p.x, y: o.y + p.y }), { x: 0, y: 0 });
+    cutMid.x /= intersections.length;
+    cutMid.y /= intersections.length;
+    const lever = { x: cutMid.x - keepCentroid.x, y: cutMid.y - keepCentroid.y };
+    const torque = cross(lever.x, lever.y, impulseLocal.x, impulseLocal.y) * 0.00095;
+
+    return {
+      valid: true,
+      keep,
+      discard,
+      keepArea,
+      discardArea,
+      keepCentroid,
+      discardCentroid,
+      discardFraction,
+      remainingStageMass,
+      impulseLocal,
+      torque,
+      intersections,
+      cutMid,
+    };
   }
 
-  beginDiveClear() {
-    if (this.clearTimer > 0 || this.state !== 'playing') return;
-    this.clearTimer = 1.5;
-    const bonus = Math.round(Math.max(0, this.timeLeft) * 18 + this.charge * 90);
-    this.score += bonus;
-    this.audio.clear();
-    this.onToast('SURVEY COMPLETE', `残り時間・SONAR BONUS +${bonus}`);
-    this.onChange('hud', this.getSnapshot());
-  }
+  applyCut(cut) {
+    const old = {
+      x: this.body.x,
+      y: this.body.y,
+      vx: this.body.vx,
+      vy: this.body.vy,
+      angle: this.body.angle,
+      av: this.body.av,
+    };
+    const keepShiftWorld = rotatePoint(cut.keepCentroid, old.angle);
+    const discardShiftWorld = rotatePoint(cut.discardCentroid, old.angle);
+    const impulseWorld = rotatePoint(cut.impulseLocal, old.angle);
 
-  advanceDive() {
-    if (this.diveIndex >= DIVES.length - 1) this.finish(true);
-    else this.startDive(this.diveIndex + 1);
-  }
-
-  finish(victory) {
-    this.state = victory ? 'victory' : 'gameover';
-    this.paused = false;
-    const oldScore = this.records.bestScore;
-    const oldStreak = this.records.bestStreak;
-    this.records.bestScore = Math.max(this.records.bestScore, this.score);
-    this.records.bestStreak = Math.max(this.records.bestStreak, this.bestStreakThisRun);
-    if (victory) this.records.clears += 1;
-    this.saveRecords();
-    this.onChange(this.state, {
-      victory,
-      isScoreRecord: this.score > oldScore,
-      isStreakRecord: this.bestStreakThisRun > oldStreak,
+    const discardPoly = cut.discard.map(p => ({
+      x: p.x - cut.discardCentroid.x,
+      y: p.y - cut.discardCentroid.y,
+    }));
+    const massRatio = cut.discardArea / Math.max(1, cut.keepArea);
+    this.fragments.push({
+      poly: discardPoly,
+      x: old.x + discardShiftWorld.x,
+      y: old.y + discardShiftWorld.y,
+      vx: old.vx - impulseWorld.x * clamp(0.45 / Math.max(0.12, massRatio), 0.6, 2.5),
+      vy: old.vy - impulseWorld.y * clamp(0.45 / Math.max(0.12, massRatio), 0.6, 2.5),
+      angle: old.angle,
+      av: old.av - cut.torque * 0.8,
+      t: 0,
+      life: 2.6,
     });
+
+    this.body.poly = cut.keep.map(p => ({
+      x: p.x - cut.keepCentroid.x,
+      y: p.y - cut.keepCentroid.y,
+    }));
+    this.body.core = {
+      x: this.body.core.x - cut.keepCentroid.x,
+      y: this.body.core.y - cut.keepCentroid.y,
+    };
+    this.body.x = old.x + keepShiftWorld.x;
+    this.body.y = old.y + keepShiftWorld.y;
+    this.body.vx = old.vx + impulseWorld.x;
+    this.body.vy = old.vy + impulseWorld.y;
+    this.body.av = clamp(old.av + cut.torque, -2.2, 2.2);
+    this.body.radius = this.computeRadius();
+    this.massRatio = cut.keepArea / this.initialArea;
+    this.stageCuts += 1;
+    this.totalCuts += 1;
+    this.dockTimer = 0;
+
+    this.audio.cut(cut.discardFraction);
+    this.onFx('cut');
+    const turn = Math.abs(cut.torque) < 0.035 ? 'STRAIGHT' : cut.torque > 0 ? 'CCW' : 'CW';
+    this.onToast(`CUT ${Math.round(cut.discardFraction * 100)}% · ${turn}`, `MASS ${Math.round(this.massRatio * 100)}%`);
+    this.emitCutSparks(cut.intersections);
+    this.onChange('hud', this.getSnapshot());
+  }
+
+  emitCutSparks(intersections) {
+    for (const p of intersections) {
+      const w = this.localToWorld(p);
+      for (let i = 0; i < 7; i += 1) {
+        const a = (i / 7) * TAU + this.globalTime;
+        this.sparks.push({
+          x: w.x,
+          y: w.y,
+          vx: Math.cos(a) * (28 + i * 7),
+          vy: Math.sin(a) * (28 + i * 7),
+          t: 0,
+          life: 0.48,
+        });
+      }
+    }
   }
 
   update(dt) {
     if (this.state !== 'playing' || this.paused) return;
     this.globalTime += dt;
+    this.hudTimer += dt;
+    this.collisionCooldown = Math.max(0, this.collisionCooldown - dt);
 
     if (this.clearTimer > 0) {
       this.clearTimer -= dt;
-      this.updateEffects(dt);
-      if (this.clearTimer <= 0) this.advanceDive();
+      this.updateFragments(dt);
+      this.updateSparks(dt);
+      if (this.clearTimer <= 0) this.advanceStage();
       return;
     }
 
     this.timeLeft -= dt;
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
-      this.finish(false);
+      this.finish(false, 'TIME');
       return;
     }
 
-    if (this.charge < this.maxCharge) {
-      this.rechargeTimer += dt;
-      if (this.rechargeTimer >= 1.85) {
-        this.rechargeTimer -= 1.85;
-        this.charge = Math.min(this.maxCharge, this.charge + 1);
-        this.onChange('hud', this.getSnapshot());
-      }
+    const b = this.body;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.angle += b.av * dt;
+    b.vx *= Math.pow(0.9997, dt * 60);
+    b.vy *= Math.pow(0.9997, dt * 60);
+    b.av *= Math.pow(0.9998, dt * 60);
+
+    this.resolveBounds();
+    if (this.gate) this.resolveGate();
+    this.updateDock(dt);
+    this.updateFragments(dt);
+    this.updateSparks(dt);
+
+    if (this.hudTimer >= 0.12) {
+      this.hudTimer = 0;
+      this.onChange('hud', this.getSnapshot());
+    }
+  }
+
+  resolveBounds() {
+    const box = this.playRect();
+    const verts = this.worldVertices();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of verts) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    let hit = false;
+    if (minX < box.x) {
+      this.body.x += box.x - minX;
+      this.body.vx = Math.abs(this.body.vx) * 0.62;
+      hit = true;
+    } else if (maxX > box.x + box.w) {
+      this.body.x -= maxX - (box.x + box.w);
+      this.body.vx = -Math.abs(this.body.vx) * 0.62;
+      hit = true;
+    }
+    if (minY < box.y) {
+      this.body.y += box.y - minY;
+      this.body.vy = Math.abs(this.body.vy) * 0.62;
+      hit = true;
+    } else if (maxY > box.y + box.h) {
+      this.body.y -= maxY - (box.y + box.h);
+      this.body.vy = -Math.abs(this.body.vy) * 0.62;
+      hit = true;
+    }
+    if (hit) this.registerCollision('CHAMBER WALL');
+  }
+
+  resolveGate() {
+    const g = this.gate;
+    const verts = this.worldVertices();
+    const topEnd = g.gapY - g.gap * 0.5;
+    const bottomStart = g.gapY + g.gap * 0.5;
+    const left = g.x - g.width * 0.5;
+    const right = g.x + g.width * 0.5;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of verts) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    const overlapsWall = minX <= right && maxX >= left;
+    const exceedsGap = minY <= topEnd || maxY >= bottomStart;
+    if (!overlapsWall || !exceedsGap) return;
+
+    const cameFromLeft = this.body.x < g.x;
+    const extent = Math.max(12, this.body.radius * 0.76);
+    this.body.x = cameFromLeft ? left - extent : right + extent;
+    this.body.vx = cameFromLeft ? -Math.abs(this.body.vx) * 0.55 : Math.abs(this.body.vx) * 0.55;
+    this.body.vy *= 0.82;
+    this.body.av *= 0.78;
+    this.dockTimer = 0;
+    this.registerCollision('GATE CONTACT');
+  }
+
+  registerCollision(label) {
+    if (this.collisionCooldown > 0) return;
+    this.collisionCooldown = 0.35;
+    this.collisions += 1;
+    this.totalCollisions += 1;
+    this.score = Math.max(0, this.score - 55);
+    this.audio.contact();
+    this.onFx('contact');
+    this.onToast(label, '反動を小さくするか、逆向きCUTで減速');
+  }
+
+  dockingStatus() {
+    const verts = this.worldVertices();
+    const fits = verts.every(p => hypot(p.x - this.goal.x, p.y - this.goal.y) <= this.goal.r - 3);
+    const speed = hypot(this.body.vx, this.body.vy);
+    const slow = speed <= this.goal.maxSpeed;
+    const angleOk = this.goal.targetAngle == null ||
+      Math.abs(angleDelta(this.body.angle, this.goal.targetAngle)) <= this.goal.angleTolerance;
+    const core = this.coreWorld();
+    const coreInside = hypot(core.x - this.goal.x, core.y - this.goal.y) <= this.goal.r * 0.62;
+    return { fits, slow, angleOk, coreInside, speed };
+  }
+
+  updateDock(dt) {
+    const s = this.dockingStatus();
+    if (s.fits && s.slow && s.angleOk && s.coreInside) {
+      this.dockTimer += dt;
+      if (this.dockTimer >= 0.72) this.clearStage();
     } else {
-      this.rechargeTimer = 0;
-    }
-
-    const b = this.playRect();
-    for (const o of this.organisms) {
-      if (!o.alive) continue;
-      o.x += o.vx * dt;
-      o.y += o.vy * dt;
-      const pad = 20;
-      if (o.x < b.x + pad && o.vx < 0) o.vx *= -1;
-      if (o.x > b.x + b.w - pad && o.vx > 0) o.vx *= -1;
-      if (o.y < b.y + pad && o.vy < 0) o.vy *= -1;
-      if (o.y > b.y + b.h - pad && o.vy > 0) o.vy *= -1;
-      o.revealed = Math.max(0, o.revealed - dt);
-      o.echo = Math.max(0, o.echo - dt * 1.8);
-      o.justPinged = Math.max(0, o.justPinged - dt);
-      o.scanMemory = Math.max(0, o.scanMemory - dt);
-      if (o.scanMemory <= 0 && SPECIES[o.species].scans > 1) o.scans = 0;
-      o.trail.unshift({ x: o.x, y: o.y });
-      if (o.trail.length > 7) o.trail.length = 7;
-    }
-
-    for (const ping of this.pings) {
-      ping.life += dt;
-      ping.prevR = ping.r;
-      ping.r += ping.speed * dt;
-      ping.alpha = clamp(1 - ping.r / ping.maxR, 0, 1);
-      for (const o of this.organisms) {
-        if (!o.alive || o.justPinged > 0) continue;
-        const d = dist(ping.x, ping.y, o.x, o.y);
-        const crossed = d >= ping.prevR - o.radius && d <= ping.r + o.radius;
-        if (!crossed) continue;
-        this.revealOrganism(o, ping, d / ping.maxR);
-      }
-      for (const vent of this.vents) {
-        const d = dist(ping.x, ping.y, vent.x, vent.y);
-        if (!vent.lastPulse || this.globalTime - vent.lastPulse > 0.4) {
-          if (d >= ping.prevR - vent.r * 0.35 && d <= ping.r + vent.r * 0.35) {
-            vent.lastPulse = this.globalTime;
-            this.spawnFalseEchoes(vent);
-          }
-        }
-      }
-    }
-    this.pings = this.pings.filter(p => p.r < p.maxR);
-    this.fakeEchoes.forEach(e => e.t += dt);
-    this.fakeEchoes = this.fakeEchoes.filter(e => e.t < 0.85);
-    this.updateEffects(dt);
-  }
-
-  findLeader(t) {
-    return t;
-  }
-
-  revealOrganism(o, ping, distance01) {
-    const def = SPECIES[o.species];
-    o.justPinged = 0.22;
-    o.echo = 1;
-    if (def.scans > 1) {
-      o.scans += 1;
-      o.scanMemory = 3.1;
-      if (o.scans >= def.scans) o.revealed = def.reveal;
-      else o.revealed = Math.max(o.revealed, 0.42);
-    } else {
-      o.revealed = def.reveal;
-    }
-    if (o.species === 'skitter') {
-      const dx = o.x - ping.x;
-      const dy = o.y - ping.y;
-      const length = Math.max(1, Math.hypot(dx, dy));
-      const burst = 38;
-      o.vx = clamp(o.vx + (dx / length) * burst, -56, 56);
-      o.vy = clamp(o.vy + (dy / length) * burst, -56, 56);
-    }
-    this.audio.echo(o.species, clamp(distance01, 0, 1));
-    this.onFx('echo');
-    if (o.species === 'deep' && o.scans === 1) this.onToast('FAINT DOUBLE ECHO', '紫の輪郭は3秒以内にもう一度PING');
-  }
-
-  spawnFalseEchoes(vent) {
-    const count = 3;
-    for (let i = 0; i < count; i++) {
-      const angle = vent.phase + i * (TAU / count) + this.globalTime * 0.3;
-      const radius = vent.r * (0.35 + i * 0.17);
-      this.fakeEchoes.push({ x: vent.x + Math.cos(angle) * radius, y: vent.y + Math.sin(angle) * radius, t: 0, phase: angle });
+      this.dockTimer = Math.max(0, this.dockTimer - dt * 1.8);
     }
   }
 
-  updateEffects(dt) {
-    for (const p of this.particles) {
+  clearStage() {
+    if (this.clearTimer > 0) return;
+    const bonus = Math.round(
+      900 +
+      this.massRatio * 850 +
+      Math.max(0, this.timeLeft) * 12 -
+      this.stageCuts * 45 -
+      this.collisions * 60
+    );
+    this.score += Math.max(250, bonus);
+    this.clearTimer = 1.35;
+    this.body.vx *= 0.2;
+    this.body.vy *= 0.2;
+    this.body.av *= 0.2;
+    this.audio.dock();
+    this.onFx('dock');
+    this.onToast('VECTOR LOCK', `+${Math.max(250, bonus)} · MASS ${Math.round(this.massRatio * 100)}%`);
+    this.onChange('hud', this.getSnapshot());
+  }
+
+  advanceStage() {
+    if (this.stageIndex >= STAGES.length - 1) this.finish(true);
+    else this.startStage(this.stageIndex + 1);
+  }
+
+  finish(victory, reason = '') {
+    this.state = victory ? 'victory' : 'gameover';
+    this.paused = false;
+    this.drag = null;
+    this.preview = null;
+    const old = { ...this.records };
+    if (victory) {
+      this.records.bestScore = Math.max(this.records.bestScore, this.score);
+      this.records.bestMass = Math.max(this.records.bestMass, Math.round(this.massRatio * 100));
+      this.records.fewestCuts = this.records.fewestCuts === 0 ? this.totalCuts : Math.min(this.records.fewestCuts, this.totalCuts);
+      this.records.clears += 1;
+      this.saveRecords();
+    }
+    this.onChange(this.state, {
+      reason,
+      isScoreRecord: victory && this.score > old.bestScore,
+      isCutsRecord: victory && (old.fewestCuts === 0 || this.totalCuts < old.fewestCuts),
+      isMassRecord: victory && Math.round(this.massRatio * 100) > old.bestMass,
+    });
+  }
+
+  updateFragments(dt) {
+    for (const f of this.fragments) {
+      f.t += dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.angle += f.av * dt;
+      f.vx *= Math.pow(0.994, dt * 60);
+      f.vy *= Math.pow(0.994, dt * 60);
+    }
+    this.fragments = this.fragments.filter(f => f.t < f.life);
+  }
+
+  updateSparks(dt) {
+    for (const p of this.sparks) {
       p.t += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= 0.975;
-      p.vy *= 0.975;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
     }
-    this.particles = this.particles.filter(p => p.t < 0.65);
+    this.sparks = this.sparks.filter(p => p.t < p.life);
   }
 
   frame(now) {
-    const dt = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000));
+    const delta = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000));
     this.lastFrame = now;
-    this.accumulator += dt;
+    this.accumulator += delta;
     while (this.accumulator >= this.step) {
       this.update(this.step);
       this.accumulator -= this.step;
@@ -570,231 +884,377 @@ export class AbyssalEchoGame {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawBackground(ctx);
-    this.drawWaterField(ctx);
-    if (this.state === 'title') this.drawTitleDemo(ctx);
-    else {
-      this.drawVents(ctx);
-      this.drawPings(ctx);
-      this.drawFakeEchoes(ctx);
-      this.drawOrganisms(ctx);
-      this.drawParticles(ctx);
-      this.drawTutorial(ctx);
+    this.drawGrid(ctx);
+    if (this.state === 'title') {
+      this.drawTitleDemo(ctx);
+      return;
     }
+    this.drawGoal(ctx);
+    this.drawGate(ctx);
+    this.drawFragments(ctx);
+    this.drawBody(ctx);
+    this.drawSparks(ctx);
+    this.drawDrag(ctx);
+    this.drawTutorial(ctx);
   }
 
   drawBackground(ctx) {
-    const g = ctx.createLinearGradient(0, 0, 0, this.height);
-    g.addColorStop(0, '#071827');
-    g.addColorStop(0.48, '#04101d');
-    g.addColorStop(1, '#02070d');
+    const g = ctx.createLinearGradient(0, 0, this.width, this.height);
+    g.addColorStop(0, '#111316');
+    g.addColorStop(0.52, '#090b0e');
+    g.addColorStop(1, '#050608');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.width, this.height);
-    const glow = ctx.createRadialGradient(this.width * 0.52, this.height * 0.36, 20, this.width * 0.52, this.height * 0.36, Math.max(this.width, this.height) * 0.72);
-    glow.addColorStop(0, 'rgba(31,111,145,.13)');
+    const glow = ctx.createRadialGradient(this.width * 0.58, this.height * 0.48, 10, this.width * 0.58, this.height * 0.48, Math.max(this.width, this.height) * 0.7);
+    glow.addColorStop(0, 'rgba(255,180,91,.045)');
     glow.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = glow;
     ctx.fillRect(0, 0, this.width, this.height);
   }
 
-  drawWaterField(ctx) {
+  drawGrid(ctx) {
     const b = this.playRect();
     ctx.save();
-    ctx.strokeStyle = 'rgba(98,181,213,.055)';
+    ctx.strokeStyle = 'rgba(224,231,225,.055)';
     ctx.lineWidth = 1;
-    const spacing = 42;
-    const drift = (this.globalTime * 4) % spacing;
-    for (let y = b.y + drift; y < b.y + b.h; y += spacing) {
+    const unit = 42;
+    const ox = (this.globalTime * 3) % unit;
+    for (let x = b.x - unit + ox; x <= b.x + b.w + unit; x += unit) {
       ctx.beginPath();
-      for (let x = b.x; x <= b.x + b.w; x += 18) {
-        const yy = y + Math.sin(x * 0.018 + this.globalTime * 0.7) * 3;
-        if (x === b.x) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
-      }
+      ctx.moveTo(x, b.y);
+      ctx.lineTo(x, b.y + b.h);
       ctx.stroke();
     }
-    for (let i = 0; i < 24; i++) {
-      const x = b.x + ((i * 91.7 + this.globalTime * (2 + (i % 3))) % b.w);
-      const y = b.y + ((i * 67.3 + i * i * 13) % b.h);
-      ctx.fillStyle = `rgba(115,204,230,${0.025 + (i % 4) * 0.012})`;
+    for (let y = b.y; y <= b.y + b.h; y += unit) {
       ctx.beginPath();
-      ctx.arc(x, y, 1 + (i % 3) * 0.55, 0, TAU);
-      ctx.fill();
+      ctx.moveTo(b.x, y);
+      ctx.lineTo(b.x + b.w, y);
+      ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(96,185,216,.14)';
+    ctx.strokeStyle = 'rgba(237,238,224,.14)';
     ctx.strokeRect(b.x, b.y, b.w, b.h);
     ctx.restore();
   }
 
-  drawVents(ctx) {
-    for (const vent of this.vents) {
-      const pulse = 0.5 + Math.sin(this.globalTime * 1.4 + vent.phase) * 0.12;
-      const g = ctx.createRadialGradient(vent.x, vent.y, 2, vent.x, vent.y, vent.r);
-      g.addColorStop(0, `rgba(255,117,91,${0.13 + pulse * 0.05})`);
-      g.addColorStop(0.55, 'rgba(146,71,87,.07)');
-      g.addColorStop(1, 'rgba(60,20,40,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(vent.x, vent.y, vent.r, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,146,118,.22)';
-      ctx.setLineDash([4, 8]);
-      ctx.beginPath();
-      ctx.arc(vent.x, vent.y, vent.r * 0.72, 0, TAU);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(255,164,134,.45)';
-      ctx.font = '700 8px ui-monospace, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('THERMAL NOISE', vent.x, vent.y + 3);
-    }
-  }
+  drawGoal(ctx) {
+    if (!this.goal) return;
+    const s = this.dockingStatus();
+    const pulse = 0.55 + Math.sin(this.globalTime * 3.2) * 0.12;
+    ctx.save();
+    ctx.translate(this.goal.x, this.goal.y);
+    ctx.strokeStyle = s.fits && s.slow && s.angleOk && s.coreInside ? '#83f0b2' : `rgba(131,240,178,${pulse})`;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#6beaa1';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.goal.r, 0, TAU);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([5, 8]);
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.goal.r * 0.62, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
 
-  drawPings(ctx) {
-    for (const ping of this.pings) {
-      ctx.save();
-      ctx.globalAlpha = ping.alpha;
-      ctx.strokeStyle = '#7cecff';
-      ctx.lineWidth = 1.5;
-      ctx.shadowColor = '#69dffa';
-      ctx.shadowBlur = 12;
+    if (this.goal.targetAngle != null) {
+      ctx.rotate(this.goal.targetAngle);
+      ctx.fillStyle = '#83f0b2';
       ctx.beginPath();
-      ctx.arc(ping.x, ping.y, ping.r, 0, TAU);
-      ctx.stroke();
-      ctx.globalAlpha *= 0.28;
-      ctx.beginPath();
-      ctx.arc(ping.x, ping.y, Math.max(0, ping.r - 9), 0, TAU);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  drawFakeEchoes(ctx) {
-    for (const echo of this.fakeEchoes) {
-      const p = clamp(echo.t / 0.85, 0, 1);
-      ctx.save();
-      ctx.globalAlpha = (1 - p) * 0.42;
-      ctx.strokeStyle = '#ff9e87';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 5]);
-      ctx.beginPath();
-      ctx.ellipse(echo.x, echo.y, 11 + p * 8, 5 + p * 4, echo.phase, 0, TAU);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  drawOrganisms(ctx) {
-    for (const o of this.organisms) {
-      if (!o.alive || o.revealed <= 0) continue;
-      const def = SPECIES[o.species];
-      const strength = clamp(o.revealed / def.reveal, 0, 1);
-      const enoughScans = o.scans >= def.scans;
-      ctx.save();
-      for (let i = Math.min(o.trail.length - 1, 5); i >= 1; i--) {
-        const t = o.trail[i];
-        ctx.globalAlpha = strength * (0.04 + (5 - i) * 0.025);
-        ctx.fillStyle = def.color;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y, 2.2, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = enoughScans ? 0.32 + strength * 0.68 : 0.3;
-      ctx.translate(o.x, o.y);
-      const angle = Math.atan2(o.vy, o.vx);
-      ctx.rotate(angle);
-      ctx.strokeStyle = def.color;
-      ctx.fillStyle = enoughScans ? `${def.color}22` : 'rgba(210,178,255,.03)';
-      ctx.lineWidth = enoughScans ? 2 : 1.4;
-      ctx.shadowColor = def.color;
-      ctx.shadowBlur = enoughScans ? 14 : 7;
-      ctx.setLineDash(enoughScans ? [] : [4, 4]);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, def.radius * 1.45, def.radius * 0.72, 0, 0, TAU);
-      ctx.fill();
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.moveTo(-def.radius * 1.2, 0);
-      ctx.lineTo(-def.radius * 2.0, -def.radius * 0.62);
-      ctx.lineTo(-def.radius * 1.78, 0);
-      ctx.lineTo(-def.radius * 2.0, def.radius * 0.62);
+      ctx.moveTo(this.goal.r + 8, 0);
+      ctx.lineTo(this.goal.r - 4, -7);
+      ctx.lineTo(this.goal.r - 4, 7);
       ctx.closePath();
+      ctx.fill();
+      ctx.rotate(-this.goal.targetAngle);
+    }
+
+    const labels = [];
+    if (!s.fits) labels.push('TRIM');
+    if (!s.slow) labels.push('BRAKE');
+    if (!s.angleOk) labels.push('ALIGN');
+    if (!s.coreInside) labels.push('CORE');
+    ctx.fillStyle = labels.length ? 'rgba(166,190,174,.68)' : '#9ff7c1';
+    ctx.font = '800 8px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels.length ? labels.join(' · ') : 'LOCKING', 0, this.goal.r + 20);
+    if (this.dockTimer > 0) {
+      ctx.strokeStyle = '#d3ffe2';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.goal.r + 7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(this.dockTimer / 0.72, 0, 1));
       ctx.stroke();
-      if (o.species === 'skitter') {
-        ctx.beginPath();
-        ctx.moveTo(-2, -def.radius * 0.72);
-        ctx.lineTo(4, -def.radius * 1.24);
-        ctx.moveTo(-2, def.radius * 0.72);
-        ctx.lineTo(4, def.radius * 1.24);
-        ctx.stroke();
-      }
-      if (o.species === 'deep') {
-        ctx.fillStyle = def.color;
-        ctx.globalAlpha *= 0.7;
-        ctx.beginPath();
-        ctx.arc(def.radius * 0.45, 0, 2.5, 0, TAU);
-        ctx.fill();
-      }
+    }
+    ctx.restore();
+  }
+
+  drawGate(ctx) {
+    if (!this.gate) return;
+    const g = this.gate;
+    const box = this.playRect();
+    const topEnd = g.gapY - g.gap * 0.5;
+    const bottomStart = g.gapY + g.gap * 0.5;
+    ctx.save();
+    ctx.fillStyle = 'rgba(226,226,208,.12)';
+    ctx.strokeStyle = 'rgba(241,183,115,.34)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(g.x - g.width * 0.5, box.y, g.width, topEnd - box.y);
+    ctx.fillRect(g.x - g.width * 0.5, bottomStart, g.width, box.y + box.h - bottomStart);
+    ctx.strokeRect(g.x - g.width * 0.5, box.y, g.width, topEnd - box.y);
+    ctx.strokeRect(g.x - g.width * 0.5, bottomStart, g.width, box.y + box.h - bottomStart);
+    ctx.fillStyle = 'rgba(244,190,123,.72)';
+    ctx.font = '800 7px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLEARANCE', g.x, topEnd - 8);
+    ctx.restore();
+  }
+
+  tracePolygon(ctx, poly) {
+    if (!poly.length) return;
+    ctx.beginPath();
+    ctx.moveTo(poly[0].x, poly[0].y);
+    for (let i = 1; i < poly.length; i += 1) ctx.lineTo(poly[i].x, poly[i].y);
+    ctx.closePath();
+  }
+
+  drawBody(ctx) {
+    if (!this.body) return;
+    const body = this.body;
+    ctx.save();
+    ctx.translate(body.x, body.y);
+    ctx.rotate(body.angle);
+
+    ctx.fillStyle = 'rgba(238,232,208,.12)';
+    ctx.strokeStyle = '#e9e1c8';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(255,206,133,.2)';
+    ctx.shadowBlur = 12;
+    this.tracePolygon(ctx, body.poly);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    for (let i = 0; i < body.poly.length; i += 2) {
+      const p = body.poly[i];
+      ctx.fillStyle = 'rgba(238,225,194,.38)';
+      ctx.beginPath();
+      ctx.arc(p.x * 0.82, p.y * 0.82, 2.2, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = 'rgba(255,190,94,.72)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(body.core.x, body.core.y);
+    ctx.lineTo(body.core.x + 24, body.core.y);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ff9f43';
+    ctx.shadowColor = '#ff9238';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(body.core.x, body.core.y, 9 * this.scaleFactor(), 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff1cf';
+    ctx.beginPath();
+    ctx.arc(body.core.x - 2, body.core.y - 2, 2.6, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+
+    const speed = hypot(body.vx, body.vy);
+    if (speed > 8) {
+      const len = clamp(speed * 0.36, 12, 66);
+      const nx = body.vx / speed;
+      const ny = body.vy / speed;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,190,94,.42)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      ctx.moveTo(body.x, body.y);
+      ctx.lineTo(body.x + nx * len, body.y + ny * len);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
-      if (!enoughScans) {
-        ctx.fillStyle = 'rgba(218,190,255,.76)';
-        ctx.font = '700 8px ui-monospace, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('1 / 2 ECHO', o.x, o.y - 25);
-      }
     }
   }
 
-  drawParticles(ctx) {
-    for (const p of this.particles) {
-      const alpha = clamp(1 - p.t / 0.65, 0, 1);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
+  drawFragments(ctx) {
+    for (const f of this.fragments) {
+      const alpha = clamp(1 - f.t / f.life, 0, 1);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.angle);
+      ctx.fillStyle = 'rgba(255,104,88,.16)';
+      ctx.strokeStyle = '#ff7d68';
+      ctx.lineWidth = 1.2;
+      this.tracePolygon(ctx, f.poly);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawSparks(ctx) {
+    for (const p of this.sparks) {
+      const a = clamp(1 - p.t / p.life, 0, 1);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffd08a';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 1.8 + alpha * 1.6, 0, TAU);
+      ctx.arc(p.x, p.y, 1.2 + a * 1.4, 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
   }
 
+  previewWorldPoly(poly, centroid = { x: 0, y: 0 }) {
+    return poly.map(p => {
+      const q = rotatePoint({ x: p.x - centroid.x, y: p.y - centroid.y }, this.body.angle);
+      const shift = rotatePoint(centroid, this.body.angle);
+      return { x: this.body.x + shift.x + q.x, y: this.body.y + shift.y + q.y };
+    });
+  }
+
+  drawDrag(ctx) {
+    if (!this.drag) return;
+    const p = this.preview;
+    if (p?.valid) {
+      const keep = this.previewWorldPoly(p.keep);
+      const discard = this.previewWorldPoly(p.discard);
+      ctx.save();
+      ctx.globalAlpha = 0.24;
+      ctx.fillStyle = '#83f0b2';
+      this.tracePolygon(ctx, keep);
+      ctx.fill();
+      ctx.fillStyle = '#ff715f';
+      this.tracePolygon(ctx, discard);
+      ctx.fill();
+      ctx.restore();
+
+      const impulseWorld = rotatePoint(p.impulseLocal, this.body.angle);
+      const mag = hypot(impulseWorld.x, impulseWorld.y);
+      const ux = impulseWorld.x / Math.max(1, mag);
+      const uy = impulseWorld.y / Math.max(1, mag);
+      const arrowLen = clamp(mag * 0.42, 32, 76);
+      ctx.save();
+      ctx.strokeStyle = '#88f0b5';
+      ctx.fillStyle = '#88f0b5';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.body.x, this.body.y);
+      ctx.lineTo(this.body.x + ux * arrowLen, this.body.y + uy * arrowLen);
+      ctx.stroke();
+      const ax = this.body.x + ux * arrowLen;
+      const ay = this.body.y + uy * arrowLen;
+      ctx.translate(ax, ay);
+      ctx.rotate(Math.atan2(uy, ux));
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-10, -5);
+      ctx.lineTo(-10, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      if (Math.abs(p.torque) > 0.035) {
+        ctx.fillStyle = '#e8d8be';
+        ctx.font = '800 9px ui-monospace, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(p.torque > 0 ? '↺ CCW' : '↻ CW', this.body.x, this.body.y - this.body.radius - 18);
+      }
+    }
+
+    ctx.save();
+    ctx.strokeStyle = p?.valid ? '#ffd08a' : '#ff765f';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    ctx.moveTo(this.drag.start.x, this.drag.start.y);
+    ctx.lineTo(this.drag.end.x, this.drag.end.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = p?.valid ? '#ffd08a' : '#ff765f';
+    ctx.beginPath();
+    ctx.arc(this.drag.start.x, this.drag.start.y, 4, 0, TAU);
+    ctx.arc(this.drag.end.x, this.drag.end.y, 4, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
   drawTutorial(ctx) {
-    if (this.diveIndex !== 0 || this.captured > 0) return;
+    if (this.stageIndex !== 0 || this.totalCuts > 0 || this.drag) return;
     const b = this.playRect();
+    const y = clamp(this.body.y - this.body.radius - 28, b.y + 24, b.y + b.h - 24);
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(207,244,255,.9)';
-    ctx.font = '800 12px system-ui, sans-serif';
-    const y = b.y + b.h * 0.18;
-    const bob = Math.sin(this.globalTime * 4) * 4;
-    ctx.fillText(this.tutorialStep === 0 ? '暗い水をタップ → PING' : '光った輪郭を直接タップ', b.x + b.w * 0.5, y + bob);
+    ctx.fillStyle = 'rgba(244,235,214,.9)';
+    ctx.font = '800 11px system-ui, sans-serif';
+    ctx.fillText('船体を横切るように指で線を引く', this.body.x, y);
+    const x1 = this.body.x - this.body.radius * 1.2;
+    const x2 = this.body.x + this.body.radius * 1.2;
+    const yy = this.body.y + Math.sin(this.globalTime * 3) * 5;
+    ctx.strokeStyle = 'rgba(255,208,138,.72)';
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(x1, yy);
+    ctx.lineTo(x2, yy);
+    ctx.stroke();
     ctx.restore();
   }
 
   drawTitleDemo(ctx) {
     const b = this.playRect();
-    const centerX = b.x + b.w * 0.58;
-    const centerY = b.y + b.h * 0.53;
-    const r = 35 + ((this.globalTime * 120) % Math.min(220, b.w * 0.28));
+    const cx = b.x + b.w * 0.68;
+    const cy = b.y + b.h * 0.53;
+    const r = 64 * this.scaleFactor();
+    const angle = Math.sin(this.globalTime * 0.55) * 0.12;
+    const poly = Array.from({ length: 8 }, (_, i) => {
+      const a = i / 8 * TAU;
+      return { x: Math.cos(a) * r * (i % 2 ? 0.92 : 1.05), y: Math.sin(a) * r * (i % 2 ? 1.04 : 0.94) };
+    });
+
     ctx.save();
-    ctx.globalAlpha = clamp(1 - r / 250, 0.08, 0.65);
-    ctx.strokeStyle = '#71e9ff';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, r, 0, TAU);
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.fillStyle = 'rgba(238,232,208,.09)';
+    ctx.strokeStyle = 'rgba(238,226,199,.62)';
+    ctx.lineWidth = 2;
+    this.tracePolygon(ctx, poly);
+    ctx.fill();
     ctx.stroke();
-    const demo = [
-      { x: centerX + 86, y: centerY - 30, species: 'drift', a: 0.75 },
-      { x: centerX - 38, y: centerY + 58, species: 'skitter', a: 0.48 },
-      { x: centerX + 146, y: centerY + 72, species: 'deep', a: 0.58 },
-    ];
-    for (const d of demo) {
-      const def = SPECIES[d.species];
-      ctx.globalAlpha = d.a;
-      ctx.strokeStyle = def.color;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.ellipse(d.x, d.y, def.radius * 1.4, def.radius * 0.7, 0, 0, TAU);
-      ctx.stroke();
-    }
+    ctx.fillStyle = '#ff9f43';
+    ctx.shadowColor = '#ff9238';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    const phase = (this.globalTime * 0.38) % 1;
+    const sx = cx - r * 1.35;
+    const ex = cx + r * 1.35;
+    const yy = cy + lerp(-r * 0.36, r * 0.32, 0.5 + Math.sin(this.globalTime * 0.8) * 0.5);
+    ctx.save();
+    ctx.globalAlpha = phase < 0.82 ? 0.82 : (1 - phase) / 0.18;
+    ctx.strokeStyle = '#ffd08a';
+    ctx.setLineDash([7, 5]);
+    ctx.lineWidth = 1.7;
+    ctx.beginPath();
+    ctx.moveTo(sx, yy);
+    ctx.lineTo(lerp(sx, ex, clamp(phase / 0.72, 0, 1)), yy);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(131,240,178,.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(b.x + b.w * 0.86, b.y + b.h * 0.40, 72 * this.scaleFactor(), 0, TAU);
+    ctx.stroke();
     ctx.restore();
   }
 }

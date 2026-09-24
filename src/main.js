@@ -1,37 +1,37 @@
-import { AbyssalEchoGame } from './game.js?v=__BUILD_ID__';
+import { VectorCutGame } from './game.js?v=__BUILD_ID__';
 
 const BUILD_ID = '__BUILD_ID__';
 const $ = (id) => document.getElementById(id);
 const canvas = $('gameCanvas');
-const game = new AbyssalEchoGame(canvas);
+const game = new VectorCutGame(canvas);
 
-const hud = $('hud');
 const titleScreen = $('titleScreen');
+const hud = $('hud');
 const pauseScreen = $('pauseScreen');
 const resultScreen = $('resultScreen');
-const diveNumber = $('diveNumber');
-const diveName = $('diveName');
-const diveHint = $('diveHint');
-const specimenValue = $('specimenValue');
-const specimenTarget = $('specimenTarget');
+const chamberNumber = $('chamberNumber');
+const chamberName = $('chamberName');
+const chamberHint = $('chamberHint');
+const massValue = $('massValue');
+const cutsValue = $('cutsValue');
 const scoreValue = $('scoreValue');
-const streakValue = $('streakValue');
 const timeValue = $('timeValue');
-const sonarPips = $('sonarPips');
+const speedValue = $('speedValue');
+const spinValue = $('spinValue');
 const toast = $('toast');
 const soundButton = $('soundButton');
 const bestReadout = $('bestReadout');
 
-let audioEnabled = true;
+let soundEnabled = true;
 let toastTimer = 0;
 let lastUiState = 'title';
 
-const cancelBrowserGesture = (event) => {
+const preventGesture = (event) => {
   if (event.cancelable) event.preventDefault();
 };
 
 for (const type of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) {
-  document.addEventListener(type, cancelBrowserGesture, { passive: false });
+  document.addEventListener(type, preventGesture, { passive: false });
 }
 
 document.addEventListener('touchstart', (event) => {
@@ -69,29 +69,18 @@ window.visualViewport?.addEventListener('resize', () => {
   game.resize();
 }, { passive: true });
 
-function renderSonar(charge, maxCharge) {
-  if (sonarPips.children.length !== maxCharge) {
-    sonarPips.replaceChildren(...Array.from({ length: maxCharge }, () => {
-      const pip = document.createElement('i');
-      pip.className = 'sonar-pip';
-      return pip;
-    }));
-  }
-  [...sonarPips.children].forEach((pip, index) => pip.classList.toggle('empty', index >= charge));
-}
-
 function syncHud(snapshot = game.getSnapshot()) {
-  diveNumber.textContent = `DIVE ${String(snapshot.diveIndex + 1).padStart(2, '0')} / 04`;
-  diveName.textContent = snapshot.diveName;
-  diveHint.textContent = snapshot.diveHint;
-  specimenValue.textContent = String(snapshot.captured).padStart(2, '0');
-  specimenTarget.textContent = `/ ${String(snapshot.target).padStart(2, '0')}`;
+  chamberNumber.textContent = `CHAMBER ${String(snapshot.stageIndex + 1).padStart(2, '0')} / 05`;
+  chamberName.textContent = snapshot.stageName;
+  chamberHint.textContent = snapshot.stageHint;
+  massValue.textContent = `${Math.round(snapshot.massRatio * 100)}%`;
+  massValue.classList.toggle('danger', snapshot.massRatio < 0.4);
+  cutsValue.textContent = String(snapshot.totalCuts).padStart(2, '0');
   scoreValue.textContent = String(snapshot.score).padStart(6, '0');
-  streakValue.textContent = snapshot.streak > 1 ? `CHAIN ×${snapshot.streak}` : 'CHAIN ×1';
-  streakValue.classList.toggle('hot', snapshot.streak >= 3);
   timeValue.textContent = Math.ceil(snapshot.timeLeft).toString().padStart(2, '0');
   timeValue.classList.toggle('danger', snapshot.timeLeft <= 10);
-  renderSonar(snapshot.charge, snapshot.maxCharge);
+  speedValue.textContent = Math.round(snapshot.speed).toString().padStart(3, '0');
+  spinValue.textContent = `${snapshot.angular >= 0 ? '+' : ''}${snapshot.angular.toFixed(2)}`;
 }
 
 function setState(state, detail = {}) {
@@ -101,11 +90,11 @@ function setState(state, detail = {}) {
     pauseScreen.hidden = true;
     resultScreen.hidden = true;
     hud.hidden = false;
-    syncHud(detail?.diveIndex == null ? game.getSnapshot() : detail);
+    syncHud(detail?.stageIndex == null ? game.getSnapshot() : detail);
     return;
   }
-  if (state === 'dive' || state === 'hud') {
-    if (!hud.hidden) syncHud(detail?.diveIndex == null ? game.getSnapshot() : detail);
+  if (state === 'stage' || state === 'hud') {
+    if (!hud.hidden) syncHud(detail?.stageIndex == null ? game.getSnapshot() : detail);
     return;
   }
   if (state === 'pause') {
@@ -124,19 +113,21 @@ function setState(state, detail = {}) {
     titleScreen.hidden = true;
     resultScreen.hidden = false;
     const victory = state === 'victory';
-    $('resultEyebrow').textContent = victory ? 'SURVEY COMPLETE' : `SIGNAL LOST · DIVE ${String(game.diveIndex + 1).padStart(2, '0')}`;
-    $('resultTitle').textContent = victory ? 'THE DEEP ANSWERED' : 'OXYGEN WINDOW CLOSED';
+    $('resultEyebrow').textContent = victory ? 'FABRICATION RUN COMPLETE' : `VECTOR LOST · CHAMBER ${String(game.stageIndex + 1).padStart(2, '0')}`;
+    $('resultTitle').textContent = victory ? 'LOCK ACHIEVED' : 'WINDOW EXPIRED';
     $('resultSubtitle').textContent = victory
-      ? '見えない海の動きを読み切った。次は、より少ないPINGで。'
-      : '必要な標本数に届かなかった。波を広く打つより、未来位置へ置く。';
+      ? '切断だけで速度・回転・形を整え、全ドックへ到達した。'
+      : '反動を大きくしすぎた。小さいCUTと逆向きCUTで速度を先に整える。';
     $('resultScore').textContent = String(game.score).padStart(6, '0');
-    $('resultStreak').textContent = `×${game.bestStreakThisRun}`;
-    $('resultPings').textContent = String(game.pingsUsed);
-    const record = detail.isScoreRecord || detail.isStreakRecord;
+    $('resultCuts').textContent = String(game.totalCuts);
+    $('resultMass').textContent = `${Math.round(game.massRatio * 100)}%`;
+    const record = detail.isScoreRecord || detail.isCutsRecord || detail.isMassRecord;
     $('recordNotice').hidden = !record;
-    $('recordNotice').textContent = detail.isScoreRecord ? 'NEW BEST SCORE' : 'NEW BEST CHAIN';
+    $('recordNotice').textContent = detail.isScoreRecord ? 'NEW BEST SCORE' : detail.isCutsRecord ? 'NEW FEWEST CUTS' : 'NEW MASS RECORD';
     const records = game.getRecords();
-    bestReadout.textContent = records.bestScore > 0 ? `BEST ${String(records.bestScore).padStart(6, '0')}` : 'BEST —';
+    bestReadout.textContent = records.bestScore > 0
+      ? `BEST ${String(records.bestScore).padStart(6, '0')} · ${records.fewestCuts || '—'} CUTS`
+      : 'BEST —';
     return;
   }
   if (state === 'title') {
@@ -159,18 +150,21 @@ game.setToastCallback((title, subtitle = '') => {
     toast.append(span);
   }
   toast.classList.add('visible');
-  window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 1900);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 1900);
 });
 
 game.setFxCallback((type) => {
   if (!navigator.vibrate) return;
-  if (type === 'capture') navigator.vibrate(12);
-  if (type === 'empty') navigator.vibrate(6);
+  if (type === 'cut') navigator.vibrate(10);
+  else if (type === 'dock') navigator.vibrate([10, 35, 18]);
+  else if (type === 'contact') navigator.vibrate(7);
 });
 
 const records = game.getRecords();
-bestReadout.textContent = records.bestScore > 0 ? `BEST ${String(records.bestScore).padStart(6, '0')}` : 'BEST —';
+bestReadout.textContent = records.bestScore > 0
+  ? `BEST ${String(records.bestScore).padStart(6, '0')} · ${records.fewestCuts || '—'} CUTS`
+  : 'BEST —';
 
 $('startButton').addEventListener('click', () => game.start());
 $('againButton').addEventListener('click', () => game.startAgain());
@@ -180,34 +174,44 @@ $('resumeButton').addEventListener('click', () => game.setPaused(false));
 $('restartButton').addEventListener('click', () => game.startAgain());
 
 soundButton.addEventListener('click', () => {
-  audioEnabled = !audioEnabled;
-  game.setAudioEnabled(audioEnabled);
-  soundButton.textContent = audioEnabled ? '♪' : '×';
-  soundButton.classList.toggle('muted', !audioEnabled);
-  soundButton.setAttribute('aria-label', audioEnabled ? 'サウンドをオフにする' : 'サウンドをオンにする');
+  soundEnabled = !soundEnabled;
+  game.setAudioEnabled(soundEnabled);
+  soundButton.textContent = soundEnabled ? '♪' : '×';
+  soundButton.classList.toggle('muted', !soundEnabled);
+  soundButton.setAttribute('aria-label', soundEnabled ? 'サウンドをオフにする' : 'サウンドをオンにする');
 });
 
 canvas.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return;
-  if (game.handlePointer(event.clientX, event.clientY)) event.preventDefault();
+  if (game.pointerDown(event.clientX, event.clientY, event.pointerId)) {
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
+    event.preventDefault();
+  }
 }, { passive: false });
+
+canvas.addEventListener('pointermove', (event) => {
+  if (game.pointerMove(event.clientX, event.clientY, event.pointerId)) event.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('pointerup', (event) => {
+  if (game.pointerUp(event.clientX, event.clientY, event.pointerId)) event.preventDefault();
+  try { canvas.releasePointerCapture(event.pointerId); } catch {}
+}, { passive: false });
+
+canvas.addEventListener('pointercancel', (event) => {
+  game.cancelPointer(event.pointerId);
+}, { passive: true });
 
 window.addEventListener('keydown', (event) => {
   if (event.code === 'Escape' || event.code === 'KeyP') {
     if (lastUiState === 'pause') game.setPaused(false);
     else if (game.state === 'playing') game.setPaused(true);
     event.preventDefault();
-    return;
-  }
-  if (event.code === 'Space' && game.state === 'playing' && !game.paused) {
-    const rect = canvas.getBoundingClientRect();
-    game.handlePointer(rect.left + rect.width * 0.5, rect.top + rect.height * 0.5);
-    event.preventDefault();
   }
 });
 
-// Do not auto-pause on blur/visibility changes. Mobile browser chrome can
-// transiently change focus; pausing is an explicit player action only.
+// Browser chrome and app switching can transiently change focus on iPhone.
+// Pause is therefore an explicit player action only; no blur/visibility auto-pause.
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => {

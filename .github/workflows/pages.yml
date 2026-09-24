@@ -1,4 +1,4 @@
-name: Publish ABYSSAL ECHO to GitHub Pages
+name: Publish VECTOR CUT to GitHub Pages
 
 on:
   push:

@@ -1,7 +1,8 @@
 const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'abyssal-echo-newgame1-' + BUILD_ID;
+const CACHE_NAME = 'vector-cut-newgame1-' + BUILD_ID;
 const BASE_URL = new URL('./', self.location.href);
 const OWNED_PREFIXES = [
+  'vector-cut-newgame1-',
   'abyssal-echo-newgame1-',
   'midnight-junction-newgame1-',
   'afterwake-newgame1-',
@@ -76,7 +77,9 @@ self.addEventListener('fetch', (event) => {
         if (response?.ok) await cache.put(cacheKey, response.clone());
         return response;
       } catch {
-        return (await cache.match(cacheKey)) || (request.mode === 'navigate' ? cache.match(new URL('./index.html', BASE_URL).href) : null) || Response.error();
+        return (await cache.match(cacheKey)) ||
+          (request.mode === 'navigate' ? cache.match(new URL('./index.html', BASE_URL).href) : null) ||
+          Response.error();
       }
     })());
     return;

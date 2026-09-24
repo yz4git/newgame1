@@ -1,103 +1,106 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#02070d" />
-    <meta name="description" content="ソナー波で見えない深海生物を探し、一瞬だけ現れる輪郭を直接タップして記録する探索ゲーム。" />
-    <link rel="icon" type="image/svg+xml" href="./icon.svg?v=__BUILD_ID__" />
-    <link rel="manifest" href="./manifest.webmanifest?v=__BUILD_ID__" />
-    <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__" />
-    <title>ABYSSAL ECHO — Listen Into Darkness</title>
-  </head>
-  <body>
-    <main id="app" class="app">
-      <canvas id="gameCanvas" aria-label="ABYSSAL ECHO ゲーム画面。暗い海をタップしてソナーを放ち、見えた生物を直接タップして記録します。"></canvas>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#070809" />
+  <meta name="description" content="船体を指で切り、切り落とした質量の反動だけで速度と回転を操ってドックへ到達する無重力アクション。" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg?v=__BUILD_ID__" />
+  <link rel="manifest" href="./manifest.webmanifest?v=__BUILD_ID__" />
+  <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__" />
+  <title>VECTOR CUT — Shape the Drift</title>
+</head>
+<body>
+  <main id="app" class="app">
+    <canvas id="gameCanvas" aria-label="VECTOR CUT ゲーム画面。船体を横切るようにドラッグして切断し、反動でコアをドックへ運びます。"></canvas>
 
-      <div id="hud" class="hud" hidden>
-        <div class="hud-top">
-          <section class="hud-card specimen-card" aria-label="標本進行">
-            <span class="eyebrow">SPECIMENS</span>
-            <div class="specimen-count"><strong id="specimenValue">00</strong><span id="specimenTarget">/ 05</span></div>
-          </section>
-
-          <section class="dive-card" aria-label="現在のダイブ">
-            <span id="diveNumber" class="eyebrow">DIVE 01 / 04</span>
-            <strong id="diveName">SHALLOW LISTEN</strong>
-            <span id="diveHint">暗い水をタップしてPING</span>
-          </section>
-
-          <section class="hud-card score-card" aria-label="スコア">
-            <span class="eyebrow">FIELD SCORE</span>
-            <strong id="scoreValue">000000</strong>
-            <span id="streakValue" class="streak">CHAIN ×1</span>
-          </section>
-        </div>
-
-        <div class="hud-bottom-left">
-          <div class="sonar-card" aria-label="ソナーチャージ">
-            <span class="eyebrow">SONAR</span>
-            <div id="sonarPips" class="sonar-pips"></div>
+    <div id="hud" class="hud" hidden>
+      <div class="hud-top">
+        <section class="hud-card" aria-label="残存質量と切断数">
+          <span class="eyebrow">HULL STATE</span>
+          <div class="metric-row">
+            <div><span>MASS</span><strong id="massValue">100%</strong></div>
+            <div><span>CUTS</span><strong id="cutsValue">00</strong></div>
           </div>
+        </section>
+
+        <section class="chamber-card" aria-label="現在のチャンバー">
+          <span id="chamberNumber" class="eyebrow">CHAMBER 01 / 05</span>
+          <strong id="chamberName">FIRST RECOIL</strong>
+          <span id="chamberHint">船体を横切るようにドラッグ</span>
+        </section>
+
+        <section class="hud-card score-card" aria-label="スコア">
+          <span class="eyebrow">FAB SCORE</span>
+          <strong id="scoreValue">000000</strong>
+          <small>LESS MASS LOST · FEWER CUTS</small>
+        </section>
+      </div>
+
+      <div class="hud-bottom">
+        <div class="left-cluster">
           <div class="hud-actions">
             <button id="soundButton" class="icon-button" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
             <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
           </div>
+          <section class="telemetry-card" aria-label="速度と回転">
+            <div><span class="eyebrow">SPEED</span><strong id="speedValue">000</strong></div>
+            <div><span class="eyebrow">SPIN</span><strong id="spinValue">+0.00</strong></div>
+          </section>
         </div>
-
-        <section class="time-card" aria-label="残り時間">
-          <span class="eyebrow">WINDOW</span>
-          <strong id="timeValue">42</strong><small>SEC</small>
+        <section class="telemetry-card time-card" aria-label="残り時間">
+          <div><span class="eyebrow">WINDOW</span><strong id="timeValue">48</strong></div>
         </section>
-
-        <div class="control-hint"><b>TAP WATER</b> PING　／　<b>TAP ECHO</b> LOG</div>
-        <div id="toast" class="toast" role="status" aria-live="polite"></div>
       </div>
 
-      <section id="titleScreen" class="screen title-screen">
-        <div class="title-topline"><span>PELAGIC SURVEY / 03:12</span><span>PASSIVE LIGHT OFFLINE</span></div>
-        <div class="title-content">
-          <div class="title-kicker"><i aria-hidden="true"></i> TOUCH-SONAR EXPLORATION</div>
-          <h1>ABYSSAL <span>ECHO</span></h1>
-          <p class="title-jp">見えない海を、波紋で読む。</p>
-          <p class="title-desc">暗い水面をタップするとソナーが広がる。<br />波に触れて一瞬だけ現れた生物を、見失う前に直接タップして記録しよう。</p>
-          <button id="startButton" class="primary-button" type="button"><span>潜航調査を開始</span><i aria-hidden="true">◌</i></button>
-          <div class="control-summary">
-            <span><b>TAP WATER</b> ソナーを放つ</span>
-            <span><b>TAP ECHO</b> 標本を記録</span>
-            <span><b>READ MOTION</b> 軌跡から次の位置を読む</span>
-          </div>
-          <a class="fresh-link" href="./latest.html?v=__BUILD_ID__">更新が反映されない場合</a>
-        </div>
-        <div class="title-bottomline"><span>4 DIVES · LIMITED SONAR · NO LIGHT</span><span id="bestReadout">BEST —</span></div>
-      </section>
+      <div class="control-hint"><b>DRAG THROUGH HULL</b> CUT　／　<b>GREEN ARROW</b> RECOIL PREVIEW</div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </div>
 
-      <section id="pauseScreen" class="screen pause-screen" hidden>
-        <div class="modal-panel">
-          <span class="eyebrow">SONAR STANDBY</span>
-          <h2>調査を保留中</h2>
-          <p>生物と波紋は停止しています。同じ状態から再開できます。</p>
-          <button id="resumeButton" class="primary-button" type="button"><span>調査を再開</span><i aria-hidden="true">▶</i></button>
-          <button id="restartButton" class="text-button" type="button">最初から潜り直す</button>
+    <section id="titleScreen" class="screen title-screen">
+      <div class="title-topline"><span>ZERO-G FABRICATION TEST / BAY 05</span><span>THRUSTERS DISABLED</span></div>
+      <div class="title-content">
+        <div class="title-kicker"><i aria-hidden="true"></i> MASS-RECOIL ACTION</div>
+        <h1>VECTOR <span>CUT</span></h1>
+        <p class="title-jp">切る。軽くなる。反動で飛ぶ。</p>
+        <p class="title-desc">推進器はない。船体を指で切り落とし、その質量の反動だけで進む。<br />速度・回転・形を整え、オレンジのコアを緑のドックへ静かにLOCKしよう。</p>
+        <button id="startButton" class="primary-button" type="button"><span>FAB TESTを開始</span><i aria-hidden="true">／</i></button>
+        <div class="control-summary">
+          <span><b>DRAG</b> 船体を横切ってCUT</span>
+          <span><b>PREVIEW</b> 離す前に反動方向を見る</span>
+          <span><b>DOCK</b> 形・速度・向きを揃える</span>
         </div>
-      </section>
+        <a class="fresh-link" href="./latest.html?v=__BUILD_ID__">更新が反映されない場合</a>
+      </div>
+      <div class="title-bottomline"><span>5 CHAMBERS · ONE GESTURE · NO THRUSTERS</span><span id="bestReadout">BEST —</span></div>
+    </section>
 
-      <section id="resultScreen" class="screen result-screen" hidden>
-        <div class="result-panel">
-          <span id="resultEyebrow" class="eyebrow">SURVEY COMPLETE</span>
-          <h2 id="resultTitle">THE DEEP ANSWERED</h2>
-          <p id="resultSubtitle">見えない海の動きを読み切った。</p>
-          <div class="result-stats">
-            <div><span>FIELD SCORE</span><strong id="resultScore">000000</strong></div>
-            <div><span>BEST CHAIN</span><strong id="resultStreak">×0</strong></div>
-            <div><span>PINGS USED</span><strong id="resultPings">0</strong></div>
-          </div>
-          <p id="recordNotice" class="record-notice" hidden>NEW BEST SCORE</p>
-          <button id="againButton" class="primary-button" type="button"><span>もう一度潜る</span><i aria-hidden="true">↻</i></button>
-          <button id="titleButton" class="text-button" type="button">タイトルへ</button>
+    <section id="pauseScreen" class="screen pause-screen" hidden>
+      <div class="modal-panel">
+        <span class="eyebrow">SIMULATION HOLD</span>
+        <h2>FAB TEST停止中</h2>
+        <p>速度・回転・切断前の形をそのまま保持しています。</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>テストを再開</span><i aria-hidden="true">▶</i></button>
+        <button id="restartButton" class="text-button" type="button">CHAMBER 01からやり直す</button>
+      </div>
+    </section>
+
+    <section id="resultScreen" class="screen result-screen" hidden>
+      <div class="result-panel">
+        <span id="resultEyebrow" class="eyebrow">FABRICATION RUN COMPLETE</span>
+        <h2 id="resultTitle">LOCK ACHIEVED</h2>
+        <p id="resultSubtitle">切断だけで全ドックへ到達した。</p>
+        <div class="result-stats">
+          <div><span>FINAL SCORE</span><strong id="resultScore">000000</strong></div>
+          <div><span>TOTAL CUTS</span><strong id="resultCuts">0</strong></div>
+          <div><span>FINAL MASS</span><strong id="resultMass">100%</strong></div>
         </div>
-      </section>
-    </main>
-    <script type="module" src="./src/main.js?v=__BUILD_ID__"></script>
-  </body>
+        <p id="recordNotice" class="record-notice" hidden>NEW BEST SCORE</p>
+        <button id="againButton" class="primary-button" type="button"><span>もう一度切る</span><i aria-hidden="true">↻</i></button>
+        <button id="titleButton" class="text-button" type="button">タイトルへ</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./src/main.js?v=__BUILD_ID__"></script>
+</body>
 </html>

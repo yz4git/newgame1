@@ -1,89 +1,201 @@
-# ABYSSAL ECHO — Design Notes
+# VECTOR CUT — Design Notes
 
-2026-09-24時点の `yz4git/game-core` にある全89 Markdownを読み直した後に設計した。前作 `MIDNIGHT JUNCTION` の鉄道・線路・分岐器・経路管理・到着順予測を再利用した別スキンではなく、入力文法と判断対象から別ゲームにしている。
+## 読み込み前提
 
-## 一文のゲーム
+実装前に `yz4git/game-core` の現在の `main` に存在する全89 Markdownを読み直した。
 
-> プレイヤーは見えない海へソナーの中心を置き、返ってきた一瞬の輪郭と移動履歴から次の位置を予測し、限られた観測回数で標本を記録する。
+設計はそこに保存されている著作権安全な抽象原則から行い、資料の文章・画面・固有表現をコピーしていない。
 
-## MIDNIGHT JUNCTIONと切り離した点
+## One-sentence game
 
-- 列車、ホーム、線路、分岐器、運行管理を完全に廃止。
-- 固定ノードを切り替える操作を廃止。
-- 次の対象を一覧表示するqueue UIを廃止。
-- 主入力を「任意地点へ情報波を置く」と「可視化された対象を直接触る」に変更。
-- 目標を配送／正着から、探索・観察・予測・記録へ変更。
-- 世界を信号扱所から無照明の深海調査へ変更。
+> プレイヤーは船体の現在速度・回転・形を観察し、切り落とす質量の位置と量を決め、CUT反動だけでコアをドックへLOCKすることに上達する。
 
-## game-coreから反映した主要原則
+「宇宙もの」という設定ではなく、**CUT位置が次の物理状態を作る**ことが差別化の中心。
 
-### 1. One-sentence game / observable decision loop
-タイトルや設定より先に、観察→判断→入力→改善を一文で定義した。全追加要素は「どこへPINGを置くか」「いつ記録するか」を変えるものだけに絞った。
+## 旧newgame1と切り離した点
 
-### 2. Touchはcontrollerのコピーではない
-仮想stickや小型buttonを主入力にしない。位置そのものが意味を持つゲームなので、水面と生物を直接タップする。見た目の生物よりhit領域を大きくし、指で輪郭が隠れてもcapture particle・音・optional hapticが画面外側へ返る。
+### MIDNIGHT JUNCTION
+- route planningなし
+- switchなし
+- queueなし
+- 到着順管理なし
 
-### 3. 少ない入力に技術密度を持たせる
-基本gestureはtapだけだが、
-- PING中心位置
-- 対象の速度
-- 逃げる方向
-- 波が到達する時刻
-- 2回観測の時間窓
-- 熱水ノイズとの距離
-で同じtapの価値が変わる。
+### ABYSSAL ECHO
+- hidden targetなし
+- sonarなし
+- reveal/captureなし
+- spatial searchなし
 
-### 4. Prediction itself is pleasurable
-対象の現在位置を常時見せない。反響時の短いtrailから未来位置を読ませる。上達を「反応が速くなった」だけでなく「少ないPINGで先読みできた」にする。
+### VECTOR CUT
+- 常に見えている一つの船体が操作対象
+- gestureはpoint tapではなくline drag
+- 主問題は探索でなくmass / inertia / geometry
+- goalは発見でなくphysics stateの整合
 
-### 5. 情報チャネルとしての音
-PINGとecho音は視線をHUDへ移さず状態を伝える。ただしサウンドOFFでも輪郭・波紋・色・文字で同じ情報を得られ、音を必須条件にはしない。
+## Core loop
 
-### 6. 制限は判断を作るために使う
-SONARは3回までだが、単なる弾切れではなく「今広く探すか、回復を待って確実に2回観測するか」を迷わせる。自動回復によって一度の浪費から永続的な失敗cascadeにはしない。
+Observe  
+→ Draw a cut  
+→ Preview retained/discarded mass + recoil + spin  
+→ Commit  
+→ New velocity / rotation / silhouette  
+→ Correct with the next cut  
+→ Dock
 
-### 7. 難度を速度一本で上げない
-- DIVE 1: 基本のPING→LOG
-- DIVE 2: 移動予測、PINGで逃げるSKITTER
-- DIVE 3: 熱水ノイズによる情報品質の選択
-- DIVE 4: 2回観測のDEEP ECHOを既存要素と統合
+ゲーム側の返答によって、同じdragが次の判断材料を作る。
 
-速度も少し上がるが、主な増加は同時に考えるルールの種類。
+## CUT一つに複数用途
 
-### 8. Reveal rules remain learnable
-ランダムな「見える／見えない」にせず、波面が実際に対象位置へ届いた時だけ反響する。同じ状況では同じ因果を返し、驚きは配置と相互作用から作る。
+新しいbuttonを増やさず、同じCUTを状況で使い分ける。
 
-### 9. Failure produces information
-時間切れ時には「未来位置へPINGを置く」という改善方向を結果画面に返す。SONAR不足時は入力を無視せずCHARGINGを明示する。DEEP ECHOの1回目は `1 / 2 ECHO` を表示し、なぜまだ記録できないかを説明する。
+- **Thrust**: 後方を切って前進
+- **Brake**: 前方を切って減速
+- **Spin**: 重心から外したCUTでtorque
+- **Counterspin**: 逆側を切って角速度を相殺
+- **Shape**: ゲートに通るsilhouetteへ加工
+- **Score optimization**: 必要最小量だけ切り、質量を残す
 
-### 10. Success feedback is causal
-捕捉した個体からparticleを放ち、species名、score、chainを同時に返す。単なる通貨ではなく「いま触った輪郭が正しかった」と0.5秒以内に理解できることを優先。
+初心者は「切ると動く」を使い、上級者は一つの線で複数問題を同時に解く。
 
-### 11. Score measures intended mastery
-得点はspecies難度、連続捕捉、残SONAR、残時間へ寄せる。長時間待機や無意味な連打を高効率にしない。PINGS USEDをresultへ残し、クリアとは別の改善軸にする。
+## Commit前のpreview
 
-### 12. Short-session retry
-失敗後は1buttonで即再開。長いdeath演出やmenu traversalを挟まない。全体は数分で一周でき、クリア後は少ないPING／高scoreを第二目標にする。
+物理結果が完全なtrial-and-errorにならないよう、pointerを離す前に表示する。
 
-### 13. Safe-area / browser gesture reliability
-`touch-action: none`、overscroll抑制、pinch/double-tap対策、safe-area内HUDを維持する。iOSのbrowser chromeや一時focus変化をゲーム内failureに変えないため、blur/visibilityによる自動Pauseはしない。
+- green: retained hull
+- red: discarded hull
+- arrow: resulting linear impulse
+- `CW / CCW`: torque direction
 
-### 14. PWA更新のキャッシュ移行
-同じrepoを別ゲームへ差し替えるため、新しいcache prefixだけでなく旧 `MIDNIGHT JUNCTION` と `AFTERWAKE` のprefixも所有cacheとして削除する。プレイ中は強制reloadしない。
+これは簡単化ではなく、**入力前に意味ある判断を可能にする情報**。
 
-## Fresh-eyes playtest項目
+## Failure grammar
 
-1. タイトルのデモだけで「波を出す→何かが見える」が10秒以内に推測できるか。
-2. 最初のPING後、輪郭を直接触ることを長文説明なしで理解できるか。
-3. 指で対象を隠してもcapture成功が分かるか。
-4. DRIFTERのtrailから未来位置を読む行動が自然に生まれるか。
-5. SKITTERの逃走がランダムではなく「PING中心から逃げた」と理解できるか。
-6. 熱水域の偽反響が単なる視認性悪化ではなく、PING位置を変える判断になるか。
-7. DEEP ECHOの1回目で「2回必要」が明確か。
-8. SONARが0の時、ゲームが壊れたように見えないか。
-9. 待つだけが最適戦略になっていないか。
-10. 高scoreのrunほど少ない無駄PINGと素早いcaptureを伴っているか。
-11. iPhone縦／横、小型／大型で主要play areaがsafe-areaや指で過度に隠れないか。
-12. 複数tap・長押し・連続tapでpage zoom/scrollや勝手なPauseが起きないか。
-13. 30分相当の繰り返しでも高頻度button reachを要求しないため疲労が小さいか。
-14. Visual quality / Controls / Decisions / Learning / Pacing / Replayを別軸でレビューできるか。
+入力が不成立な場合、無反応にはしない。
+
+- `NO SECTION`: 船体を横切っていない
+- `CORE PROTECTED`: cut lineがcoreへ近すぎる
+- `CUT TOO THIN`: 意味のないsliver
+- `MINIMUM MASS`: 25%未満になる
+- `GATE CONTACT`: clearance不足 / speed過大
+- `CHAMBER WALL`: vector control不足
+- timeout: speedを作りすぎた、brake timingを改善
+
+重要な失敗は「次に何を変えるか」へ翻訳する。
+
+## Learning sequence
+
+### Chamber 1 — Introduce
+一回のCUTで反動を体験。
+
+### Chamber 2 — Practice / inversion
+同じ仕組みを逆方向へ使い、brakeを学ぶ。
+
+### Chamber 3 — Test
+CUT位置を重心からずらし、linear + angular responseを同時に読む。
+
+### Chamber 4 — Combine with geometry
+「移動するためのCUT」と「通過形状にするCUT」が競合する。
+
+### Chamber 5 — Mastery
+mass / speed / angular velocity / silhouette / orientationを同時に扱う。
+
+ルールを途中で別ゲームへ置き換えない。
+
+## Difficulty
+
+増やさないもの:
+- 敵HP
+- 大量button
+- 不可視random
+- 単純な全体速度倍率
+
+増やすもの:
+- 同じCUTが担う目的
+- commit時に考えるstate
+- geometry constraint
+- angular constraint
+- resource tradeoff（残存mass）
+
+## Resource design
+
+弾数やenergy barではなく**船体そのものがresource**。
+
+CUTは必ず将来の選択肢を減らすため、
+- 今大きく切って強い反動
+- 少量を残して後の調整余地
+が競合する。
+
+25% floorはsoft-lock回避用のsafety railであり、最適解を自動決定するものではない。
+
+## Score
+
+scoreは意図したskillを測る。
+
+Positive:
+- chamber clear
+- remaining time
+- remaining mass
+
+Negative:
+- excessive cuts
+- wall/gate contact
+
+「安全な場所で無限に操作する」ほど有利にならない。
+
+## Touch-native input
+
+仮想gamepadを使わず、指の線と切断面を1:1対応させる。
+
+- 一本指で完結
+- simultaneous buttonなし
+- hit regionではなくcanvas全体をdirect manipulation surface化
+- drag線はfingerの外側にも描画され、入力取得を確認可能
+- preview arrowはfinger footprintから離れたbody center付近へ表示
+- system edgeだけに依存するgestureは使わない
+
+## iPhone browser reliability
+
+- `viewport-fit=cover`
+- scale固定
+- `touch-action:none`
+- overscroll防止
+- gesturestart/change/end防止
+- dblclick/double-tap zoom防止
+- Pointer Captureでdrag継続
+- safe-area HUD
+- explicit pause only
+- DPR上限
+
+過去プロジェクトで問題になった「操作中にページzoom」「ブラウザfocus変化で勝手にpause」を再発させない。
+
+## Art direction
+
+深海blueだったABYSSAL ECHOから明確に切り離す。
+
+- graphite / warm ivory / amber
+- retained mass = ivory
+- discard preview = coral red
+- valid recoil = green
+- core = orange
+- industrial zero-g test chamber
+- texture assetなし、shape / line / glowで情報階層を作る
+
+静止画の装飾より、CUTとdrift中の読みやすさを優先。
+
+## Fresh-eyes checklist
+
+1. title demoを10秒見れば「線を引いて物体を切る」と推測できるか。
+2. 最初のCUTで反動方向を理解できるか。
+3. preview arrowと実際の速度変化が一致して感じられるか。
+4. invalid CUT理由を次のgestureへ利用できるか。
+5. Chamber 2で「前側を切ればbrake」という第二用途を自発的に理解できるか。
+6. Chamber 3でCW/CCW previewがtorque学習を助けるか。
+7. Chamber 4のgateは単なる狭さではなくshape decisionを作るか。
+8. small repeated cutsが支配戦法になっていないか。
+9. giant first cutだけで全chamberを解けないか。
+10. high scoreと少CUT / high mass / low contactが相関するか。
+11. fingerが重要なvector arrowやcoreを恒常的に隠さないか。
+12. drag中にpage scroll / zoom / browser gestureが出ないか。
+13. pointerがcanvas外へ少し出てもPointer Captureでgestureが破綻しないか。
+14. blur / browser chromeによる勝手なpauseが起きないか。
+15. failure→retryに長い待ち時間がないか。
