@@ -13,11 +13,11 @@ const STAGES = Array.from({ length: 24 }, (_, i) => {
   const goalY = [0.50, 0.66, 0.32, 0.55][slot];
   const speed = Math.max(0, (n - 3) * 4.2);
   const goalRadius = Math.max(50, 96 - i * 2.0);
-  const time = Math.max(16, 26 - Math.floor(i / 5));
+  const time = Math.max(8, 11 - Math.floor(i / 8));
   const gateFrom = n >= 7;
   const switchFrom = n >= 15 && slot >= 2;
   const denseFrom = n >= 11;
-  const gateGap = Math.max(88, 154 - (n - 7) * 4.2);
+  const gateGap = Math.max(158, 196 - (n - 7) * 2.4);
   const name = n <= 4 ? ['ONE CUT', 'DRIFT', 'CROSS LINE', 'QUICK TURN'][slot]
     : n <= 8 ? ['FAST LANE', 'BRAKE LINE', 'NARROW PASS', 'EDGE SHOT'][slot]
     : n <= 12 ? ['SPIN RUSH', 'GATE RUN', 'HEAVY CUT', 'DENSE VECTOR'][slot]
@@ -103,19 +103,23 @@ function makeEndlessStage(index) {
     goalY = clamp(goalY + (goalY < 0.5 ? 0.18 : -0.18), 0.20, 0.80);
   }
   const speed = Math.min(150, 76 + depth * 1.25);
-  const goalRadius = Math.max(34, 50 - depth * 0.12);
-  const gateGap = Math.max(70, 92 - depth * 0.18);
-  const useSwitch = n >= 28 && rnd() < Math.min(0.42, 0.18 + depth * 0.006);
+  const goalRadius = Math.max(36, 52 - depth * 0.10);
+  const gateGap = Math.max(146, 174 - depth * 0.16);
+  const useSwitch = n >= 30 && rnd() < Math.min(0.32, 0.12 + depth * 0.004);
   const nodeCount = n >= 27 ? (rnd() < 0.55 ? 2 : 1) : 0;
   const gateX = 0.43 + rnd() * 0.14;
-  const gateY = clamp((startY + goalY) * 0.5 + (rnd() - 0.5) * 0.13, 0.25, 0.75);
+  const startX = flip ? 0.78 : 0.22;
+  const goalX = flip ? 0.22 : 0.78;
+  const pathT = clamp((gateX - startX) / (goalX - startX), 0, 1);
+  const pathY = lerp(startY, goalY, pathT);
+  const gateY = clamp(pathY + (rnd() - 0.5) * 0.08, 0.25, 0.75);
 
   const stage = {
     name: `ENDLESS ${String(n).padStart(3, '0')}`,
     hint: '自動生成CHAMBER。CORE → GOALだけは変わらない。最短CUTを探す',
-    time: Math.max(12, 18 - Math.floor(depth / 18)),
-    start: [flip ? 0.78 : 0.22, startY],
-    goal: [flip ? 0.22 : 0.78, goalY],
+    time: Math.max(6, 9 - Math.floor(depth / 36)),
+    start: [startX, startY],
+    goal: [goalX, goalY],
     velocity: [
       flip ? -speed : speed,
       (rnd() - 0.5) * Math.min(48, 18 + depth * 0.45),
@@ -335,6 +339,8 @@ export class VectorCutGame {
     this.initialMass = 1;
     this.dockTimer = 0;
     this.clearTimer = 0;
+    this.failTimer = 0;
+    this.failReason = '';
     this.collisionCooldown = 0;
     this.body = null;
     this.goal = null;
@@ -425,9 +431,8 @@ export class VectorCutGame {
     if (this.state !== 'gameover') return;
     this.state = 'playing';
     this.paused = false;
-    this.score = Math.max(0, this.score - 250);
     this.startStage(this.stageIndex, true);
-    this.onToast(`CONTINUE · CHAMBER ${String(this.stageIndex + 1).padStart(2, '0')}`, '-250 · このCHAMBERから再開');
+    this.onToast(`CONTINUE · CHAMBER ${String(this.stageIndex + 1).padStart(this.stageIndex >= 24 ? 3 : 2, '0')}`, 'このCHAMBERから再開');
     this.onChange('start', this.getSnapshot());
   }
 
@@ -455,6 +460,8 @@ export class VectorCutGame {
     this.stageScrapLinks = 0;
     this.dockTimer = 0;
     this.clearTimer = 0;
+    this.failTimer = 0;
+    this.failReason = '';
     this.collisionCooldown = 0;
     this.fragments = [];
     this.sparks = [];
@@ -594,7 +601,7 @@ export class VectorCutGame {
   }
 
   pointerDown(clientX, clientY, pointerId = 0) {
-    if (this.state !== 'playing' || this.paused || this.clearTimer > 0) return false;
+    if (this.state !== 'playing' || this.paused || this.clearTimer > 0 || this.failTimer > 0) return false;
     const r = this.canvas.getBoundingClientRect();
     const x = clientX - r.left;
     const y = clientY - r.top;
@@ -850,12 +857,12 @@ export class VectorCutGame {
     this.onChange('hud', this.getSnapshot());
     if (!this.hasAvailableCut()) {
       const exhaustedStage = this.stageIndex;
-      this.onToast('NO MORE CUTS', 'コアをGOALへ届かせられなければ終了');
       window.setTimeout(() => {
-        if (this.state === 'playing' && this.stageIndex === exhaustedStage && this.clearTimer <= 0) {
-          this.finish(false, 'NO_CUTS');
+        if (this.state === 'playing' && this.stageIndex === exhaustedStage &&
+            this.clearTimer <= 0 && this.failTimer <= 0 && !this.dockingStatus().coreInside) {
+          this.triggerFastFail('NO_CUTS', 'NO CUTS LEFT');
         }
-      }, 650);
+      }, 420);
     }
   }
 
@@ -890,10 +897,21 @@ export class VectorCutGame {
       return;
     }
 
+    if (this.failTimer > 0) {
+      this.failTimer -= dt;
+      this.updateSparks(dt);
+      if (this.failTimer <= 0) {
+        const retryStage = this.stageIndex;
+        this.startStage(retryStage, true);
+        this.onToast(`RETRY · CHAMBER ${String(retryStage + 1).padStart(retryStage >= 24 ? 3 : 2, '0')}`, 'もう一度');
+      }
+      return;
+    }
+
     this.timeLeft -= dt;
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
-      this.finish(false, 'TIME');
+      this.triggerFastFail('TIME', 'TIME OUT');
       return;
     }
 
@@ -905,11 +923,15 @@ export class VectorCutGame {
     b.vy *= Math.pow(0.9997, dt * 60);
     b.av *= Math.pow(0.9998, dt * 60);
 
-    this.resolveBounds();
-    if (this.gate) this.resolveGate();
+    this.updateDock(dt);
+    if (this.clearTimer > 0) {
+      this.updateSparks(dt);
+      return;
+    }
+    if (this.resolveBounds()) return;
+    if (this.gate && this.resolveGate()) return;
     this.updateFragments(dt);
     this.updateSwitches(dt);
-    this.updateDock(dt);
     this.updateSparks(dt);
 
     if (this.hudTimer >= 0.12) {
@@ -921,33 +943,13 @@ export class VectorCutGame {
   resolveBounds() {
     const box = this.playRect();
     const verts = this.worldVertices();
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of verts) {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    }
-    let hit = false;
-    if (minX < box.x) {
-      this.body.x += box.x - minX;
-      this.body.vx = Math.abs(this.body.vx) * 0.62;
-      hit = true;
-    } else if (maxX > box.x + box.w) {
-      this.body.x -= maxX - (box.x + box.w);
-      this.body.vx = -Math.abs(this.body.vx) * 0.62;
-      hit = true;
-    }
-    if (minY < box.y) {
-      this.body.y += box.y - minY;
-      this.body.vy = Math.abs(this.body.vy) * 0.62;
-      hit = true;
-    } else if (maxY > box.y + box.h) {
-      this.body.y -= maxY - (box.y + box.h);
-      this.body.vy = -Math.abs(this.body.vy) * 0.62;
-      hit = true;
-    }
-    if (hit) this.registerCollision('CHAMBER WALL');
+    const hit = verts.some(p =>
+      p.x < box.x || p.x > box.x + box.w ||
+      p.y < box.y || p.y > box.y + box.h
+    );
+    if (!hit) return false;
+    this.triggerFastFail('WALL', 'WALL HIT');
+    return true;
   }
 
   gateWallRects() {
@@ -993,24 +995,28 @@ export class VectorCutGame {
   resolveGate() {
     const verts = this.worldVertices();
     const walls = this.gateWallRects();
-    if (!walls.some(wall => this.polygonIntersectsRect(verts, wall))) return;
+    const hit = walls.some(wall => this.polygonIntersectsRect(verts, wall));
+    if (!hit) return false;
+    this.triggerFastFail('GATE', 'GATE HIT');
+    return true;
+  }
 
-    const minX = Math.min(...verts.map(p => p.x));
-    const maxX = Math.max(...verts.map(p => p.x));
-    const wall = walls[0];
-    const cameFromLeft = this.body.vx >= 0 ? this.body.x <= this.gate.x : this.body.x < this.gate.x;
-    const skin = 0.8;
-
-    if (cameFromLeft) {
-      this.body.x -= Math.max(0, maxX - wall.left) + skin;
-      this.body.vx = -Math.abs(this.body.vx) * 0.55;
-    } else {
-      this.body.x += Math.max(0, wall.right - minX) + skin;
-      this.body.vx = Math.abs(this.body.vx) * 0.55;
-    }
-    this.body.vy *= 0.86;
-    this.body.av *= 0.82;
-    this.registerCollision('GATE CONTACT');
+  triggerFastFail(reason, label) {
+    if (this.state !== 'playing' || this.clearTimer > 0 || this.failTimer > 0) return;
+    this.failReason = reason;
+    this.failTimer = 0.52;
+    this.drag = null;
+    this.preview = null;
+    this.collisions += 1;
+    this.totalCollisions += 1;
+    this.score = Math.max(0, this.score - 35);
+    this.body.vx = 0;
+    this.body.vy = 0;
+    this.body.av = 0;
+    this.audio.contact();
+    this.onFx('contact');
+    this.onToast(`FAIL · ${label}`, 'AUTO RETRY');
+    this.onChange('hud', this.getSnapshot());
   }
 
   registerCollision(label) {
@@ -1021,7 +1027,7 @@ export class VectorCutGame {
     this.score = Math.max(0, this.score - 55);
     this.audio.contact();
     this.onFx('contact');
-    this.onToast(label, '反動を小さくするか、逆向きCUTで減速');
+    this.onToast(label, '軌道を修正');
   }
 
   dockingStatus() {
@@ -1046,7 +1052,7 @@ export class VectorCutGame {
       this.collisions * 45
     );
     this.score += Math.max(250, bonus);
-    this.clearTimer = 0.48;
+    this.clearTimer = 0.34;
     this.body.vx *= 0.2;
     this.body.vy *= 0.2;
     this.body.av *= 0.2;

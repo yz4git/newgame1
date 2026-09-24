@@ -1,7 +1,7 @@
 {
   "name": "VECTOR CUT — Shape the Drift",
   "short_name": "VECTOR CUT",
-  "description": "船体CUTの反動でCOREをGOALへ送り続ける高速アクション。24面の後は自動生成ENDLESSへ続き、失敗時はそのCHAMBERからコンティニュー可能。",
+  "description": "CUT反動でCOREをGOALへ送る高速アクション。成功は即クリア、ゲート・壁接触は即FAIL、約0.5秒で同じ面を自動リトライ。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
