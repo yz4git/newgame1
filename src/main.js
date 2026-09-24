@@ -116,10 +116,12 @@ function setState(state, detail = {}) {
     resultScreen.hidden = false;
     const victory = state === 'victory';
     $('resultEyebrow').textContent = victory ? 'FABRICATION RUN COMPLETE' : `VECTOR LOST · CHAMBER ${String(game.stageIndex + 1).padStart(2, '0')}`;
-    $('resultTitle').textContent = victory ? 'LOCK ACHIEVED' : 'WINDOW EXPIRED';
+    $('resultTitle').textContent = victory ? 'CORE RUSH COMPLETE' : (detail.reason === 'NO_CUTS' ? 'NO CUTS LEFT' : 'WINDOW EXPIRED');
     $('resultSubtitle').textContent = victory
-      ? 'CUT反動・切断片・質量差を使い分け、全ドックへ到達した。'
-      : '反動を大きくしすぎた。小さいCUTと逆向きCUTで速度を先に整える。';
+      ? 'コアをGOALへ送り込み続け、24 CHAMBERSを突破した。'
+      : detail.reason === 'NO_CUTS'
+        ? '切れる船体が残っていない。次は少ないCUTでコアを直接GOALへ送る。'
+        : '時間切れ。軌道プレビューを使い、より少ないCUTでGOALへ向かう。';
     $('resultScore').textContent = String(game.score).padStart(6, '0');
     $('resultCuts').textContent = String(game.totalCuts);
     $('resultMass').textContent = `${Math.round(game.massRatio * 100)}%`;

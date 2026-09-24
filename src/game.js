@@ -4,66 +4,80 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const hypot = (x, y) => Math.hypot(x, y);
 const cross = (ax, ay, bx, by) => ax * by - ay * bx;
 
-const STAGES = [
-  {
-    name: 'FIRST RECOIL',
-    hint: '船体を横切るようにドラッグ。切り落とした側と逆へ反動する',
-    time: 48, start: [0.24, 0.52], goal: [0.78, 0.52], velocity: [0, 0], angular: 0,
-    goalRadius: 88, maxSpeed: 48, targetAngle: null, gate: null, core: [0, 0],
-  },
-  {
-    name: 'BRAKE VECTOR',
-    hint: '進みすぎる時は、進行方向側を切って逆向きの反動を作る',
-    time: 50, start: [0.20, 0.44], goal: [0.79, 0.58], velocity: [74, 12], angular: 0,
-    goalRadius: 84, maxSpeed: 42, targetAngle: null, gate: null, core: [6, -3],
-  },
-  {
-    name: 'COUNTERSPIN',
-    hint: '重心から外れたCUTは回転も生む。反動矢印とCW/CCWを読む',
-    time: 56, start: [0.24, 0.60], goal: [0.77, 0.40], velocity: [12, -6], angular: 0.62,
-    goalRadius: 82, maxSpeed: 40, targetAngle: 0, angleTolerance: 0.34, gate: null, core: [-8, 5],
-  },
-  {
-    name: 'NARROW GATE',
-    hint: '壁の隙間に合わせて船体を削る。形そのものが通行条件になる',
-    time: 62, start: [0.20, 0.50], goal: [0.82, 0.50], velocity: [18, 0], angular: 0.08,
-    goalRadius: 78, maxSpeed: 42, targetAngle: null,
-    gate: { x: 0.56, gapY: 0.50, gap: 126 }, core: [5, 0],
-  },
-  {
-    name: 'VECTOR LOCK',
-    hint: '質量・速度・回転・ゲートを一度に整え、縦向きでLOCKする',
-    time: 70, start: [0.18, 0.66], goal: [0.82, 0.34], velocity: [36, -18], angular: -0.48,
-    goalRadius: 74, maxSpeed: 36, targetAngle: Math.PI / 2, angleTolerance: 0.28,
-    gate: { x: 0.55, gapY: 0.47, gap: 116 }, core: [-10, 7],
-  },
-  {
-    name: 'SCRAP LINK',
-    hint: '赤い切断片も道具。左のSCRAP SWITCHへ飛ばしつつ右へ進む',
-    time: 62, start: [0.32, 0.54], goal: [0.82, 0.54], velocity: [0, 0], angular: 0,
-    goalRadius: 80, maxSpeed: 44, targetAngle: null, gate: null, core: [0, 0],
-    switches: [{ x: 0.12, y: 0.54, r: 21 }],
-  },
-  {
-    name: 'HEAVY VECTOR',
-    hint: '二重リングは高密度材。面積より「どの質量を捨てるか」で反動が変わる',
-    time: 66, start: [0.22, 0.64], goal: [0.80, 0.35], velocity: [10, -4], angular: 0.18,
-    goalRadius: 78, maxSpeed: 40, targetAngle: 0.12, angleTolerance: 0.36, gate: null, core: [3, -2],
-    massNodes: [
-      { x: -0.48, y: 0.16, weight: 0.17 },
-      { x: 0.34, y: -0.34, weight: 0.09 },
+const STAGES = Array.from({ length: 24 }, (_, i) => {
+  const n = i + 1;
+  const tier = Math.floor(i / 4);
+  const slot = i % 4;
+  const flip = i % 2 === 1;
+  const startY = [0.50, 0.36, 0.66, 0.47][slot];
+  const goalY = [0.50, 0.66, 0.32, 0.55][slot];
+  const speed = Math.max(0, (n - 3) * 4.2);
+  const goalRadius = Math.max(50, 96 - i * 2.0);
+  const time = Math.max(16, 26 - Math.floor(i / 5));
+  const gateFrom = n >= 7;
+  const switchFrom = n >= 15 && slot >= 2;
+  const denseFrom = n >= 11;
+  const gateGap = Math.max(88, 154 - (n - 7) * 4.2);
+  const name = n <= 4 ? ['ONE CUT', 'DRIFT', 'CROSS LINE', 'QUICK TURN'][slot]
+    : n <= 8 ? ['FAST LANE', 'BRAKE LINE', 'NARROW PASS', 'EDGE SHOT'][slot]
+    : n <= 12 ? ['SPIN RUSH', 'GATE RUN', 'HEAVY CUT', 'DENSE VECTOR'][slot]
+    : n <= 16 ? ['TIGHT WINDOW', 'MASS SHIFT', 'SCRAP ENTRY', 'SWITCH LINE'][slot]
+    : n <= 20 ? ['HOT GATE', 'DOUBLE READ', 'SCRAP LOCK', 'PRECISION CUT'][slot]
+    : ['FINAL DRIFT', 'HARD VECTOR', 'LOCK BREAK', 'CORE RUSH'][slot];
+
+  const stage = {
+    name,
+    hint: n <= 4
+      ? 'コアを緑のGOALへ入れれば即クリア。最短のCUTを狙う'
+      : n <= 8
+        ? '速くなっても条件は同じ。コアをGOALへ直接送り込む'
+        : n <= 14
+          ? '狭いゲートと回転を読み、コアの軌道を先に作る'
+          : n <= 20
+            ? 'SCRAPと高密度材を使い、最短ルートを作る'
+            : '小さいGOAL・高速・狭いゲート。1本ごとの精度が重要',
+    time,
+    start: [flip ? 0.76 : 0.24, startY],
+    goal: [flip ? 0.24 : 0.76, goalY],
+    velocity: [
+      flip ? -speed : speed,
+      ((slot - 1.5) * 5.2) + (tier >= 4 ? (flip ? -8 : 8) : 0),
     ],
-  },
-  {
-    name: 'TWIN PURPOSE',
-    hint: '1本のCUTで破片をSWITCHへ、自機をゲートへ。最後に縦向きでLOCKする',
-    time: 80, start: [0.25, 0.66], goal: [0.82, 0.31], velocity: [18, -4], angular: -0.30,
-    goalRadius: 72, maxSpeed: 34, targetAngle: Math.PI / 2, angleTolerance: 0.26,
-    gate: { x: 0.56, gapY: 0.47, gap: 116, requiresSwitch: true }, core: [-7, 6],
-    switches: [{ x: 0.13, y: 0.66, r: 20 }],
-    massNodes: [{ x: -0.46, y: 0.18, weight: 0.15 }],
-  },
-];
+    angular: n < 5 ? 0 : (flip ? -1 : 1) * Math.min(0.92, 0.08 + (n - 4) * 0.045),
+    goalRadius,
+    maxSpeed: 999,
+    targetAngle: null,
+    gate: gateFrom
+      ? {
+          x: 0.50 + (slot === 1 ? -0.04 : slot === 2 ? 0.04 : 0),
+          gapY: clamp((startY + goalY) * 0.5 + (slot === 3 ? -0.05 : 0), 0.28, 0.72),
+          gap: gateGap,
+          requiresSwitch: switchFrom,
+        }
+      : null,
+    core: [
+      (slot === 1 ? 5 : slot === 2 ? -6 : 0) + (tier >= 4 ? (flip ? -4 : 4) : 0),
+      slot === 3 ? 6 : slot === 1 ? -4 : 0,
+    ],
+  };
+
+  if (denseFrom) {
+    stage.massNodes = [
+      { x: flip ? 0.44 : -0.44, y: slot % 2 ? -0.20 : 0.18, weight: 0.10 + tier * 0.012 },
+    ];
+    if (n >= 19) stage.massNodes.push({ x: flip ? -0.30 : 0.30, y: -0.34, weight: 0.08 });
+  }
+
+  if (switchFrom) {
+    stage.switches = [{
+      x: flip ? 0.86 : 0.14,
+      y: clamp(startY + (slot === 3 ? -0.12 : 0.10), 0.20, 0.80),
+      r: Math.max(15, 21 - tier),
+    }];
+  }
+
+  return stage;
+});
 
 function rotatePoint(p, angle) {
   const c = Math.cos(angle);
@@ -443,12 +457,9 @@ export class VectorCutGame {
   }
 
   objectiveText() {
-    if (this.switches.length) {
-      const active = this.switches.filter(sw => sw.active).length;
-      return `SCRAP LINK ${active}/${this.switches.length}${this.body?.massNodes?.length ? ' · HEAVY MASS' : ''}`;
-    }
-    if (this.body?.massNodes?.length) return 'HEAVY MASS · READ THE RINGS';
-    return 'LESS MASS LOST · FEWER CUTS';
+    if (this.gate?.requiresSwitch && !this.allSwitchesActive()) return 'SCRAP SWITCH → GATE → GOAL';
+    if (this.gate) return 'PASS GATE → CORE TO GOAL';
+    return 'CORE TO GOAL · FAST CLEAR';
   }
 
   computeRadius(poly = this.body.poly) {
@@ -750,9 +761,12 @@ export class VectorCutGame {
     this.emitCutSparks(cut.intersections);
     this.onChange('hud', this.getSnapshot());
     if (!this.hasAvailableCut()) {
-      this.onToast('NO MORE CUTS', 'これ以上切れないため終了');
+      const exhaustedStage = this.stageIndex;
+      this.onToast('NO MORE CUTS', 'コアをGOALへ届かせられなければ終了');
       window.setTimeout(() => {
-        if (this.state === 'playing' && this.clearTimer <= 0) this.finish(false, 'NO_CUTS');
+        if (this.state === 'playing' && this.stageIndex === exhaustedStage && this.clearTimer <= 0) {
+          this.finish(false, 'NO_CUTS');
+        }
       }, 650);
     }
   }
@@ -889,46 +903,35 @@ export class VectorCutGame {
   }
 
   dockingStatus() {
-    const verts = this.worldVertices();
-    const insideCount = verts.filter(p => hypot(p.x - this.goal.x, p.y - this.goal.y) <= this.goal.r + 8 * this.scaleFactor()).length;
-    const fits = insideCount >= Math.ceil(verts.length * 0.72);
-    const speed = hypot(this.body.vx, this.body.vy);
-    const slow = speed <= this.goal.maxSpeed * 1.22;
-    const angleOk = this.goal.targetAngle == null ||
-      Math.abs(angleDelta(this.body.angle, this.goal.targetAngle)) <= this.goal.angleTolerance + 0.12;
     const core = this.coreWorld();
-    const coreInside = hypot(core.x - this.goal.x, core.y - this.goal.y) <= this.goal.r * 0.78;
-    const switchOk = this.allSwitchesActive();
-    return { fits, slow, angleOk, coreInside, switchOk, speed };
+    const coreRadius = 9 * this.scaleFactor();
+    const distance = hypot(core.x - this.goal.x, core.y - this.goal.y);
+    const coreInside = distance <= Math.max(4, this.goal.r - coreRadius);
+    return { coreInside, distance };
   }
 
-  updateDock(dt) {
-    const s = this.dockingStatus();
-    if (s.fits && s.slow && s.angleOk && s.coreInside && s.switchOk) {
-      this.dockTimer += dt;
-      if (this.dockTimer >= 0.46) this.clearStage();
-    } else {
-      this.dockTimer = Math.max(0, this.dockTimer - dt * 1.8);
-    }
+  updateDock() {
+    if (this.dockingStatus().coreInside) this.clearStage();
   }
 
   clearStage() {
     if (this.clearTimer > 0) return;
     const bonus = Math.round(
-      900 +
-      this.massRatio * 850 +
-      Math.max(0, this.timeLeft) * 12 -
-      this.stageCuts * 45 -
-      this.collisions * 60
+      700 +
+      this.massRatio * 420 +
+      Math.max(0, this.timeLeft) * 38 -
+      this.stageCuts * 55 -
+      this.collisions * 45
     );
     this.score += Math.max(250, bonus);
-    this.clearTimer = 1.35;
+    this.clearTimer = 0.48;
     this.body.vx *= 0.2;
     this.body.vy *= 0.2;
     this.body.av *= 0.2;
     this.audio.dock();
     this.onFx('dock');
-    this.onToast('VECTOR LOCK', `+${Math.max(250, bonus)} · MASS ${Math.round(this.massRatio * 100)}%`);
+    const quick = this.timeLeft >= this.config.time * 0.72 ? ' · QUICK' : '';
+    this.onToast(`CORE IN · CLEAR${quick}`, `+${Math.max(250, bonus)} · ${this.stageCuts} CUT${this.stageCuts === 1 ? '' : 'S'}`);
     this.onChange('hud', this.getSnapshot());
   }
 
@@ -1082,54 +1085,31 @@ export class VectorCutGame {
   drawGoal(ctx) {
     if (!this.goal) return;
     const s = this.dockingStatus();
-    const pulse = 0.55 + Math.sin(this.globalTime * 3.2) * 0.12;
+    const pulse = 0.58 + Math.sin(this.globalTime * 4.2) * 0.16;
     ctx.save();
     ctx.translate(this.goal.x, this.goal.y);
-    ctx.strokeStyle = s.fits && s.slow && s.angleOk && s.coreInside ? '#83f0b2' : `rgba(131,240,178,${pulse})`;
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = s.coreInside ? '#d5ffe3' : `rgba(131,240,178,${pulse})`;
+    ctx.fillStyle = s.coreInside ? 'rgba(131,240,178,.20)' : 'rgba(131,240,178,.055)';
+    ctx.lineWidth = s.coreInside ? 4 : 2.5;
     ctx.shadowColor = '#6beaa1';
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = s.coreInside ? 24 : 14;
     ctx.beginPath();
     ctx.arc(0, 0, this.goal.r, 0, TAU);
+    ctx.fill();
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.setLineDash([5, 8]);
-    ctx.globalAlpha = 0.45;
+
+    ctx.strokeStyle = 'rgba(131,240,178,.42)';
+    ctx.setLineDash([4, 7]);
     ctx.beginPath();
-    ctx.arc(0, 0, this.goal.r * 0.62, 0, TAU);
+    ctx.arc(0, 0, Math.max(5, this.goal.r - 9 * this.scaleFactor()), 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
 
-    if (this.goal.targetAngle != null) {
-      ctx.rotate(this.goal.targetAngle);
-      ctx.fillStyle = '#83f0b2';
-      ctx.beginPath();
-      ctx.moveTo(this.goal.r + 8, 0);
-      ctx.lineTo(this.goal.r - 4, -7);
-      ctx.lineTo(this.goal.r - 4, 7);
-      ctx.closePath();
-      ctx.fill();
-      ctx.rotate(-this.goal.targetAngle);
-    }
-
-    const labels = [];
-    if (!s.fits) labels.push('TRIM');
-    if (!s.slow) labels.push('BRAKE');
-    if (!s.angleOk) labels.push('ALIGN');
-    if (!s.coreInside) labels.push('CORE');
-    if (!s.switchOk) labels.push('SWITCH');
-    ctx.fillStyle = labels.length ? 'rgba(166,190,174,.68)' : '#9ff7c1';
-    ctx.font = '800 8px ui-monospace, monospace';
+    ctx.fillStyle = s.coreInside ? '#d5ffe3' : '#9ff7c1';
+    ctx.font = '900 9px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(labels.length ? labels.join(' · ') : 'LOCKING', 0, this.goal.r + 20);
-    if (this.dockTimer > 0) {
-      ctx.strokeStyle = '#d3ffe2';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(0, 0, this.goal.r + 7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(this.dockTimer / 0.46, 0, 1));
-      ctx.stroke();
-    }
+    ctx.fillText(s.coreInside ? 'CLEAR' : 'CORE → GOAL', 0, this.goal.r + 19);
     ctx.restore();
   }
 
