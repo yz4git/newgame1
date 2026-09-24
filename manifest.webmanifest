@@ -1,7 +1,7 @@
 {
   "name": "VECTOR CUT — Shape the Drift",
   "short_name": "VECTOR CUT",
-  "description": "船体を切った反動でオレンジのコアを緑のGOALへ送り込み、数秒クリアを重ねながら24面の上昇難度へ挑む無重力アクション。",
+  "description": "船体CUTの反動でCOREをGOALへ送り続ける高速アクション。24面の後は自動生成ENDLESSへ続き、失敗時はそのCHAMBERからコンティニュー可能。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

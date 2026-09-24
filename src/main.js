@@ -22,6 +22,8 @@ const spinValue = $('spinValue');
 const toast = $('toast');
 const soundButton = $('soundButton');
 const bestReadout = $('bestReadout');
+const continueButton = $('continueButton');
+const againButton = $('againButton');
 
 let soundEnabled = true;
 let toastTimer = 0;
@@ -71,7 +73,10 @@ window.visualViewport?.addEventListener('resize', () => {
 }, { passive: true });
 
 function syncHud(snapshot = game.getSnapshot()) {
-  chamberNumber.textContent = `CHAMBER ${String(snapshot.stageIndex + 1).padStart(2, '0')} / ${String(snapshot.stageCount).padStart(2, '0')}`;
+  const chamberNo = String(snapshot.stageIndex + 1).padStart(snapshot.stageIndex >= 24 ? 3 : 2, '0');
+  chamberNumber.textContent = snapshot.stageCount == null
+    ? `CHAMBER ${chamberNo} / ∞`
+    : `CHAMBER ${chamberNo} / ${String(snapshot.stageCount).padStart(2, '0')}`;
   chamberName.textContent = snapshot.stageName;
   chamberHint.textContent = snapshot.stageHint;
   massValue.textContent = `${Math.round(snapshot.massRatio * 100)}%`;
@@ -115,13 +120,16 @@ function setState(state, detail = {}) {
     titleScreen.hidden = true;
     resultScreen.hidden = false;
     const victory = state === 'victory';
-    $('resultEyebrow').textContent = victory ? 'FABRICATION RUN COMPLETE' : `VECTOR LOST · CHAMBER ${String(game.stageIndex + 1).padStart(2, '0')}`;
+    const chamberNo = String(game.stageIndex + 1).padStart(game.stageIndex >= 24 ? 3 : 2, '0');
+    $('resultEyebrow').textContent = victory ? 'FABRICATION RUN COMPLETE' : `VECTOR LOST · CHAMBER ${chamberNo}`;
     $('resultTitle').textContent = victory ? 'CORE RUSH COMPLETE' : (detail.reason === 'NO_CUTS' ? 'NO CUTS LEFT' : 'WINDOW EXPIRED');
     $('resultSubtitle').textContent = victory
-      ? 'コアをGOALへ送り込み続け、24 CHAMBERSを突破した。'
+      ? 'CORE RUSH COMPLETE'
       : detail.reason === 'NO_CUTS'
-        ? '切れる船体が残っていない。次は少ないCUTでコアを直接GOALへ送る。'
-        : '時間切れ。軌道プレビューを使い、より少ないCUTでGOALへ向かう。';
+        ? '切れる船体が残っていない。同じCHAMBERからすぐ再挑戦できる。'
+        : '時間切れ。同じCHAMBERからコンティニューして軌道を詰めよう。';
+    continueButton.hidden = victory;
+    againButton.textContent = victory ? 'もう一度切る' : 'CHAMBER 01からやり直す';
     $('resultScore').textContent = String(game.score).padStart(6, '0');
     $('resultCuts').textContent = String(game.totalCuts);
     $('resultMass').textContent = `${Math.round(game.massRatio * 100)}%`;
@@ -172,7 +180,8 @@ bestReadout.textContent = records.bestScore > 0
   : 'BEST —';
 
 $('startButton').addEventListener('click', () => game.start());
-$('againButton').addEventListener('click', () => game.startAgain());
+continueButton.addEventListener('click', () => game.continueStage());
+againButton.addEventListener('click', () => game.startAgain());
 $('titleButton').addEventListener('click', () => game.returnToTitle());
 $('pauseButton').addEventListener('click', () => game.setPaused(true));
 $('resumeButton').addEventListener('click', () => game.setPaused(false));

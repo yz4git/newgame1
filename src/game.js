@@ -79,6 +79,84 @@ const STAGES = Array.from({ length: 24 }, (_, i) => {
   return stage;
 });
 
+const ENDLESS_STAGE_CACHE = new Map();
+
+function seededStageRandom(stageNumber) {
+  let state = (Math.imul(stageNumber, 0x9e3779b1) ^ 0xa341316c) >>> 0;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 4294967296;
+  };
+}
+
+function makeEndlessStage(index) {
+  if (ENDLESS_STAGE_CACHE.has(index)) return ENDLESS_STAGE_CACHE.get(index);
+  const n = index + 1;
+  const depth = n - 25;
+  const rnd = seededStageRandom(n);
+  const flip = rnd() > 0.5;
+  const startY = 0.25 + rnd() * 0.50;
+  let goalY = 0.23 + rnd() * 0.54;
+  if (Math.abs(goalY - startY) < 0.14) {
+    goalY = clamp(goalY + (goalY < 0.5 ? 0.18 : -0.18), 0.20, 0.80);
+  }
+  const speed = Math.min(150, 76 + depth * 1.25);
+  const goalRadius = Math.max(34, 50 - depth * 0.12);
+  const gateGap = Math.max(70, 92 - depth * 0.18);
+  const useSwitch = n >= 28 && rnd() < Math.min(0.42, 0.18 + depth * 0.006);
+  const nodeCount = n >= 27 ? (rnd() < 0.55 ? 2 : 1) : 0;
+  const gateX = 0.43 + rnd() * 0.14;
+  const gateY = clamp((startY + goalY) * 0.5 + (rnd() - 0.5) * 0.13, 0.25, 0.75);
+
+  const stage = {
+    name: `ENDLESS ${String(n).padStart(3, '0')}`,
+    hint: '自動生成CHAMBER。CORE → GOALだけは変わらない。最短CUTを探す',
+    time: Math.max(12, 18 - Math.floor(depth / 18)),
+    start: [flip ? 0.78 : 0.22, startY],
+    goal: [flip ? 0.22 : 0.78, goalY],
+    velocity: [
+      flip ? -speed : speed,
+      (rnd() - 0.5) * Math.min(48, 18 + depth * 0.45),
+    ],
+    angular: (rnd() > 0.5 ? 1 : -1) * Math.min(1.45, 0.58 + depth * 0.018),
+    goalRadius,
+    maxSpeed: 999,
+    targetAngle: null,
+    gate: {
+      x: gateX,
+      gapY: gateY,
+      gap: gateGap,
+      requiresSwitch: useSwitch,
+    },
+    core: [(rnd() - 0.5) * 14, (rnd() - 0.5) * 12],
+  };
+
+  if (nodeCount > 0) {
+    stage.massNodes = Array.from({ length: nodeCount }, (_, j) => ({
+      x: (j === 0 ? (flip ? 0.42 : -0.42) : (flip ? -0.30 : 0.30)),
+      y: (rnd() - 0.5) * 0.72,
+      weight: Math.min(0.19, 0.105 + depth * 0.0015 + rnd() * 0.035),
+    }));
+  }
+
+  if (useSwitch) {
+    stage.switches = [{
+      x: flip ? 0.88 : 0.12,
+      y: clamp(startY + (rnd() - 0.5) * 0.22, 0.18, 0.82),
+      r: Math.max(13, 18 - Math.floor(depth / 30)),
+    }];
+  }
+
+  ENDLESS_STAGE_CACHE.set(index, stage);
+  return stage;
+}
+
+function getStage(index) {
+  return index < STAGES.length ? STAGES[index] : makeEndlessStage(index);
+}
+
 function rotatePoint(p, angle) {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
@@ -276,7 +354,7 @@ export class VectorCutGame {
     requestAnimationFrame(this.frame);
   }
 
-  get config() { return STAGES[this.stageIndex]; }
+  get config() { return getStage(this.stageIndex); }
   setOnChange(fn) { this.onChange = fn || (() => {}); }
   setToastCallback(fn) { this.onToast = fn || (() => {}); }
   setFxCallback(fn) { this.onFx = fn || (() => {}); }
@@ -342,6 +420,16 @@ export class VectorCutGame {
   }
 
   startAgain() { this.start(); }
+
+  continueStage() {
+    if (this.state !== 'gameover') return;
+    this.state = 'playing';
+    this.paused = false;
+    this.score = Math.max(0, this.score - 250);
+    this.startStage(this.stageIndex, true);
+    this.onToast(`CONTINUE · CHAMBER ${String(this.stageIndex + 1).padStart(2, '0')}`, '-250 · このCHAMBERから再開');
+    this.onChange('start', this.getSnapshot());
+  }
 
   returnToTitle() {
     this.state = 'title';
@@ -487,7 +575,7 @@ export class VectorCutGame {
     return {
       state: this.state,
       stageIndex: this.stageIndex,
-      stageCount: STAGES.length,
+      stageCount: this.stageIndex < STAGES.length ? STAGES.length : null,
       stageName: this.config?.name || '',
       stageHint: this.config?.hint || '',
       timeLeft: this.timeLeft,
@@ -862,32 +950,66 @@ export class VectorCutGame {
     if (hit) this.registerCollision('CHAMBER WALL');
   }
 
-  resolveGate() {
+  gateWallRects() {
+    if (!this.gate) return [];
     const g = this.gate;
-    const verts = this.worldVertices();
-    const locked = g.requiresSwitch && !this.allSwitchesActive();
-    const topEnd = locked ? this.playRect().y + this.playRect().h : g.gapY - g.gap * 0.5;
-    const bottomStart = locked ? this.playRect().y + this.playRect().h : g.gapY + g.gap * 0.5;
+    const box = this.playRect();
     const left = g.x - g.width * 0.5;
     const right = g.x + g.width * 0.5;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of verts) {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
+    if (g.requiresSwitch && !this.allSwitchesActive()) {
+      return [{ left, right, top: box.y, bottom: box.y + box.h }];
     }
-    const overlapsWall = minX <= right && maxX >= left;
-    const exceedsGap = minY <= topEnd || maxY >= bottomStart;
-    if (!overlapsWall || !exceedsGap) return;
+    const topEnd = g.gapY - g.gap * 0.5;
+    const bottomStart = g.gapY + g.gap * 0.5;
+    return [
+      { left, right, top: box.y, bottom: topEnd },
+      { left, right, top: bottomStart, bottom: box.y + box.h },
+    ].filter(r => r.bottom > r.top);
+  }
 
-    const cameFromLeft = this.body.x < g.x;
-    const extent = Math.max(12, this.body.radius * 0.76);
-    this.body.x = cameFromLeft ? left - extent : right + extent;
-    this.body.vx = cameFromLeft ? -Math.abs(this.body.vx) * 0.55 : Math.abs(this.body.vx) * 0.55;
-    this.body.vy *= 0.82;
-    this.body.av *= 0.78;
-    this.dockTimer = 0;
+  pointInRect(p, r) {
+    return p.x > r.left + 0.15 && p.x < r.right - 0.15 &&
+      p.y > r.top + 0.15 && p.y < r.bottom - 0.15;
+  }
+
+  polygonIntersectsRect(poly, r) {
+    if (poly.some(p => this.pointInRect(p, r))) return true;
+    const corners = [
+      { x: r.left, y: r.top },
+      { x: r.right, y: r.top },
+      { x: r.right, y: r.bottom },
+      { x: r.left, y: r.bottom },
+    ];
+    for (let i = 0; i < poly.length; i += 1) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      for (let j = 0; j < 4; j += 1) {
+        if (segmentIntersection(a, b, corners[j], corners[(j + 1) % 4])) return true;
+      }
+    }
+    return false;
+  }
+
+  resolveGate() {
+    const verts = this.worldVertices();
+    const walls = this.gateWallRects();
+    if (!walls.some(wall => this.polygonIntersectsRect(verts, wall))) return;
+
+    const minX = Math.min(...verts.map(p => p.x));
+    const maxX = Math.max(...verts.map(p => p.x));
+    const wall = walls[0];
+    const cameFromLeft = this.body.vx >= 0 ? this.body.x <= this.gate.x : this.body.x < this.gate.x;
+    const skin = 0.8;
+
+    if (cameFromLeft) {
+      this.body.x -= Math.max(0, maxX - wall.left) + skin;
+      this.body.vx = -Math.abs(this.body.vx) * 0.55;
+    } else {
+      this.body.x += Math.max(0, wall.right - minX) + skin;
+      this.body.vx = Math.abs(this.body.vx) * 0.55;
+    }
+    this.body.vy *= 0.86;
+    this.body.av *= 0.82;
     this.registerCollision('GATE CONTACT');
   }
 
@@ -936,8 +1058,7 @@ export class VectorCutGame {
   }
 
   advanceStage() {
-    if (this.stageIndex >= STAGES.length - 1) this.finish(true);
-    else this.startStage(this.stageIndex + 1);
+    this.startStage(this.stageIndex + 1);
   }
 
   finish(victory, reason = '') {
@@ -1146,23 +1267,25 @@ export class VectorCutGame {
 
   drawGate(ctx) {
     if (!this.gate) return;
-    const g = this.gate;
-    const box = this.playRect();
-    const locked = g.requiresSwitch && !this.allSwitchesActive();
-    const topEnd = locked ? box.y + box.h : g.gapY - g.gap * 0.5;
-    const bottomStart = locked ? box.y + box.h : g.gapY + g.gap * 0.5;
+    const locked = this.gate.requiresSwitch && !this.allSwitchesActive();
+    const walls = this.gateWallRects();
     ctx.save();
     ctx.fillStyle = locked ? 'rgba(255,118,95,.14)' : 'rgba(226,226,208,.12)';
-    ctx.strokeStyle = 'rgba(241,183,115,.34)';
+    ctx.strokeStyle = locked ? 'rgba(255,118,95,.56)' : 'rgba(241,183,115,.34)';
     ctx.lineWidth = 1;
-    ctx.fillRect(g.x - g.width * 0.5, box.y, g.width, topEnd - box.y);
-    ctx.fillRect(g.x - g.width * 0.5, bottomStart, g.width, box.y + box.h - bottomStart);
-    ctx.strokeRect(g.x - g.width * 0.5, box.y, g.width, topEnd - box.y);
-    ctx.strokeRect(g.x - g.width * 0.5, bottomStart, g.width, box.y + box.h - bottomStart);
-    ctx.fillStyle = 'rgba(244,190,123,.72)';
+    for (const wall of walls) {
+      const w = wall.right - wall.left;
+      const h = wall.bottom - wall.top;
+      ctx.fillRect(wall.left, wall.top, w, h);
+      ctx.strokeRect(wall.left, wall.top, w, h);
+    }
+    ctx.fillStyle = locked ? 'rgba(255,145,125,.88)' : 'rgba(244,190,123,.72)';
     ctx.font = '800 7px ui-monospace, monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(locked ? 'SWITCH LOCK' : 'CLEARANCE', g.x, Math.max(box.y + 12, topEnd - 8));
+    const labelY = locked
+      ? this.playRect().y + 13
+      : Math.max(this.playRect().y + 12, this.gate.gapY - this.gate.gap * 0.5 - 8);
+    ctx.fillText(locked ? 'SWITCH LOCK' : 'CLEARANCE', this.gate.x, labelY);
     ctx.restore();
   }
 
