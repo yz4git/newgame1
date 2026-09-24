@@ -642,6 +642,33 @@ export class VectorCutGame {
     };
   }
 
+  hasAvailableCut() {
+    if (!this.body || this.massRatio <= 0.251) return false;
+    const poly = this.body.poly;
+    if (!poly || poly.length < 3) return false;
+    const xs = poly.map(p => p.x);
+    const ys = poly.map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const span = Math.max(maxX - minX, maxY - minY) + 80 * this.scaleFactor();
+    const center = polygonCentroid(poly);
+    const offsets = [-0.34, -0.18, 0, 0.18, 0.34];
+    const angles = 16;
+    for (let i = 0; i < angles; i += 1) {
+      const a = (Math.PI * i) / angles;
+      const nx = -Math.sin(a), ny = Math.cos(a);
+      const dx = Math.cos(a), dy = Math.sin(a);
+      for (const t of offsets) {
+        const ox = center.x + nx * span * t;
+        const oy = center.y + ny * span * t;
+        const p0 = this.localToWorld({ x: ox - dx * span, y: oy - dy * span });
+        const p1 = this.localToWorld({ x: ox + dx * span, y: oy + dy * span });
+        if (this.analyzeCut(p0, p1).valid) return true;
+      }
+    }
+    return false;
+  }
+
   predictCut(cut) {
     const old = this.body;
     const keepShiftWorld = rotatePoint(cut.keepCentroid, old.angle);
@@ -722,6 +749,12 @@ export class VectorCutGame {
     this.onToast(`CUT ${Math.round(cut.discardFraction * 100)}% MASS · ${turn}${dense}`, `HULL MASS ${Math.round(this.massRatio * 100)}%`);
     this.emitCutSparks(cut.intersections);
     this.onChange('hud', this.getSnapshot());
+    if (!this.hasAvailableCut()) {
+      this.onToast('NO MORE CUTS', 'これ以上切れないため終了');
+      window.setTimeout(() => {
+        if (this.state === 'playing' && this.clearTimer <= 0) this.finish(false, 'NO_CUTS');
+      }, 650);
+    }
   }
 
   emitCutSparks(intersections) {
@@ -857,13 +890,14 @@ export class VectorCutGame {
 
   dockingStatus() {
     const verts = this.worldVertices();
-    const fits = verts.every(p => hypot(p.x - this.goal.x, p.y - this.goal.y) <= this.goal.r - 3);
+    const insideCount = verts.filter(p => hypot(p.x - this.goal.x, p.y - this.goal.y) <= this.goal.r + 8 * this.scaleFactor()).length;
+    const fits = insideCount >= Math.ceil(verts.length * 0.72);
     const speed = hypot(this.body.vx, this.body.vy);
-    const slow = speed <= this.goal.maxSpeed;
+    const slow = speed <= this.goal.maxSpeed * 1.22;
     const angleOk = this.goal.targetAngle == null ||
-      Math.abs(angleDelta(this.body.angle, this.goal.targetAngle)) <= this.goal.angleTolerance;
+      Math.abs(angleDelta(this.body.angle, this.goal.targetAngle)) <= this.goal.angleTolerance + 0.12;
     const core = this.coreWorld();
-    const coreInside = hypot(core.x - this.goal.x, core.y - this.goal.y) <= this.goal.r * 0.62;
+    const coreInside = hypot(core.x - this.goal.x, core.y - this.goal.y) <= this.goal.r * 0.78;
     const switchOk = this.allSwitchesActive();
     return { fits, slow, angleOk, coreInside, switchOk, speed };
   }
@@ -872,7 +906,7 @@ export class VectorCutGame {
     const s = this.dockingStatus();
     if (s.fits && s.slow && s.angleOk && s.coreInside && s.switchOk) {
       this.dockTimer += dt;
-      if (this.dockTimer >= 0.72) this.clearStage();
+      if (this.dockTimer >= 0.46) this.clearStage();
     } else {
       this.dockTimer = Math.max(0, this.dockTimer - dt * 1.8);
     }
@@ -1093,7 +1127,7 @@ export class VectorCutGame {
       ctx.strokeStyle = '#d3ffe2';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(0, 0, this.goal.r + 7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(this.dockTimer / 0.72, 0, 1));
+      ctx.arc(0, 0, this.goal.r + 7, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(this.dockTimer / 0.46, 0, 1));
       ctx.stroke();
     }
     ctx.restore();
