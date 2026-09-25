@@ -193,10 +193,9 @@ function chipNoise(events, start, duration, volume, noiseKind, noiseRate = 1) {
   events.push({ channel: 'noise', start, duration, volume, noiseKind, noiseRate });
 }
 
-function generateJetDriftBgm() {
+function generateJetDriftBgm(bpm = 132) {
   const intensity = 0.68;
   const seed = 0x53504143;
-  const bpm = 164;
   const bars = 4;
   const rootMidi = 57;
   const progression = [0, 5, 6, 4];
@@ -301,7 +300,8 @@ function generateJetDriftSfx(purpose, intensity, seed) {
 }
 
 const JET_DRIFT_8BIT = {
-  bgm: generateJetDriftBgm(),
+  bgmSlow: generateJetDriftBgm(132),
+  bgmFast: generateJetDriftBgm(164),
   warp: generateJetDriftSfx('magic', 0.88, 0x57415250),
   clear: generateJetDriftSfx('critical', 0.72, 0x434c4541),
   explosion: generateJetDriftSfx('explosion', 0.92, 0x424f4f4d),
@@ -453,6 +453,8 @@ class AudioBus {
     this.sfxNodes = new Set();
     this.musicTimer = 0;
     this.musicNextTime = 0;
+    this.musicMode = 'slow';
+    this.musicComposition = JET_DRIFT_8BIT.bgmSlow;
   }
 
   async unlock() {
@@ -494,20 +496,24 @@ class AudioBus {
     }
   }
 
-  async startMusic() {
+  async startMusic(mode = 'slow') {
     if (!this.enabled) return;
     await this.unlock();
-    if (!this.ctx || !this.musicBus || this.musicTimer) return;
-    this.musicNextTime = this.ctx.currentTime + 0.04;
+    if (!this.ctx || !this.musicBus) return;
+    if (this.musicTimer && this.musicMode === mode) return;
+    if (this.musicTimer) this.stopMusic();
+    this.musicMode = mode;
+    this.musicComposition = mode === 'fast' ? JET_DRIFT_8BIT.bgmFast : JET_DRIFT_8BIT.bgmSlow;
+    this.musicNextTime = this.ctx.currentTime + 0.035;
     this.scheduleMusicAhead();
     this.musicTimer = window.setInterval(() => this.scheduleMusicAhead(), 350);
   }
 
   scheduleMusicAhead() {
-    if (!this.ctx || !this.musicBus || !this.enabled) return;
+    if (!this.ctx || !this.musicBus || !this.enabled || !this.musicComposition) return;
     while (this.musicNextTime < this.ctx.currentTime + 1.35) {
-      scheduleChipComposition(this.ctx, this.musicBus, JET_DRIFT_8BIT.bgm, this.musicNextTime, this.musicNodes);
-      this.musicNextTime += JET_DRIFT_8BIT.bgm.duration;
+      scheduleChipComposition(this.ctx, this.musicBus, this.musicComposition, this.musicNextTime, this.musicNodes);
+      this.musicNextTime += this.musicComposition.duration;
     }
   }
 
@@ -581,6 +587,10 @@ class AudioBus {
     void this.playSfx(JET_DRIFT_8BIT.clear, 0.18);
   }
 
+  warpOut() {
+    void this.playSfx(JET_DRIFT_8BIT.warp);
+  }
+
   warning() {
     void this.playSfx(JET_DRIFT_8BIT.warning);
   }
@@ -605,6 +615,7 @@ export class JetDriftGame {
     this.attempts = 0;
     this.failTimer = 0;
     this.clearTimer = 0;
+    this.warpOutTimer = 0;
     this.strandedTimer = 0;
     this.globalTime = 0;
     this.hudTimer = 0;
@@ -612,6 +623,7 @@ export class JetDriftGame {
     this.timeCriticalWarned = false;
     this.fuelWarned = false;
     this.fuelCriticalWarned = false;
+    this.musicUrgent = false;
     this.dpr = 1;
     this.width = 1;
     this.height = 1;
@@ -633,7 +645,7 @@ export class JetDriftGame {
   setFxCallback(fn) { this.onFx = fn || (() => {}); }
   setAudioEnabled(v) {
     this.audio.setEnabled(v);
-    if (v && this.state === 'playing') void this.audio.startMusic();
+    if (v && this.state === 'playing') void this.audio.startMusic(this.isMusicUrgent() ? 'fast' : 'slow');
   }
   unlockAudio() { this.audio.unlock(); }
 
@@ -673,7 +685,7 @@ export class JetDriftGame {
     this.score = 0;
     this.attempts = 0;
     this.startStage(0, true);
-    void this.audio.startMusic();
+    void this.audio.startMusic('slow');
     this.onChange('start', this.getSnapshot());
   }
 
@@ -698,12 +710,12 @@ export class JetDriftGame {
       this.audio.stopJet();
       this.audio.stopMusic();
     } else {
-      void this.audio.startMusic();
+      void this.audio.startMusic(this.isMusicUrgent() ? 'fast' : 'slow');
     }
     this.onChange(this.paused ? 'pause' : 'resume', this.getSnapshot());
   }
 
-  startStage(index, silent = false) {
+  startStage(index, silent = false, warpOut = false) {
     this.stageIndex = index;
     this.stage = createStage(index);
     this.player.x = 0;
@@ -717,14 +729,18 @@ export class JetDriftGame {
     this.timeLeft = this.stage.time;
     this.failTimer = 0;
     this.clearTimer = 0;
+    this.warpOutTimer = warpOut ? 0.72 : 0;
     this.strandedTimer = 0;
     this.timeWarned = false;
     this.timeCriticalWarned = false;
     this.fuelWarned = false;
     this.fuelCriticalWarned = false;
+    this.musicUrgent = false;
     this.thrusting = false;
     this.audio.stopJet();
     this.audio.stopSfx();
+    void this.audio.startMusic('slow');
+    if (warpOut) this.audio.warpOut();
     if (!silent) {
       this.onToast('STAGE ' + String(index + 1).padStart(index >= 24 ? 3 : 2, '0') + ' · ' + this.stage.title, this.stage.hint);
     }
@@ -738,7 +754,7 @@ export class JetDriftGame {
   }
 
   setThrusting(v) {
-    const next = Boolean(v) && this.state === 'playing' && !this.paused && this.failTimer <= 0 && this.clearTimer <= 0;
+    const next = Boolean(v) && this.state === 'playing' && !this.paused && this.failTimer <= 0 && this.clearTimer <= 0 && this.warpOutTimer <= 0;
     if (next === this.thrusting) return;
     this.thrusting = next;
     if (next) {
@@ -747,6 +763,17 @@ export class JetDriftGame {
     } else {
       this.audio.stopJet();
     }
+  }
+
+  isMusicUrgent() {
+    return this.timeLeft <= 2.5 || this.fuel <= 12;
+  }
+
+  syncMusicTempo() {
+    const urgent = this.isMusicUrgent();
+    if (urgent === this.musicUrgent) return;
+    this.musicUrgent = urgent;
+    void this.audio.startMusic(urgent ? 'fast' : 'slow');
   }
 
   getSnapshot() {
@@ -820,7 +847,13 @@ export class JetDriftGame {
 
     if (this.clearTimer > 0) {
       this.clearTimer -= dt;
-      if (this.clearTimer <= 0) this.startStage(this.stageIndex + 1);
+      if (this.clearTimer <= 0) this.startStage(this.stageIndex + 1, false, true);
+      return;
+    }
+
+    if (this.warpOutTimer > 0) {
+      this.warpOutTimer -= dt;
+      if (this.warpOutTimer < 0) this.warpOutTimer = 0;
       return;
     }
 
@@ -839,6 +872,7 @@ export class JetDriftGame {
     if (!this.timeCriticalWarned && this.timeLeft <= 2.5) {
       this.timeCriticalWarned = true;
       this.audio.warning('time');
+      this.syncMusicTempo();
       this.onFx('warningCritical');
     }
     if (this.timeLeft <= 0) {
@@ -883,6 +917,7 @@ export class JetDriftGame {
       this.audio.warning('fuel');
       this.onFx('warningCritical');
     }
+    this.syncMusicTempo();
 
     p.vx += ax * dt;
     p.vy += ay * dt;
@@ -902,6 +937,7 @@ export class JetDriftGame {
         pickup.taken = true;
         this.fuel = Math.min(100, this.fuel + pickup.amount);
         this.audio.pickup();
+        this.syncMusicTempo();
         this.onFx('pickup');
         this.onToast('FUEL + ' + pickup.amount, Math.round(this.fuel) + '%');
       }
@@ -1478,6 +1514,56 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawWarpOutEffect(ctx) {
+    if (this.warpOutTimer <= 0) return;
+    const duration = 0.72;
+    const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.5;
+    const diag = Math.hypot(this.width, this.height);
+    const collapse = 1 - t;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const flash = clamp(1 - t * 2.8, 0, 1);
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(231,250,255,${flash * 0.82})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    const count = 70;
+    for (let i = 0; i < count; i += 1) {
+      const a = ((i * 137.508) % 360) * Math.PI / 180;
+      const seed = ((i * 53) % 101) / 101;
+      const outer = 42 + seed * diag * 0.46;
+      const len = (70 + seed * 250) * collapse;
+      const inner = 14 + seed * 34 + t * outer * 0.72;
+      const x1 = cx + Math.cos(a) * inner;
+      const y1 = cy + Math.sin(a) * inner;
+      const x2 = cx + Math.cos(a) * (inner + len);
+      const y2 = cy + Math.sin(a) * (inner + len);
+      ctx.strokeStyle = `rgba(205,239,255,${clamp(0.18 + collapse * 0.68, 0, 0.9)})`;
+      ctx.lineWidth = 0.8 + seed * 1.5 + collapse * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    const r = 10 + collapse * Math.min(this.width, this.height) * 0.33;
+    const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    core.addColorStop(0, `rgba(245,253,255,${0.44 * collapse})`);
+    core.addColorStop(0.2, `rgba(96,211,255,${0.28 * collapse})`);
+    core.addColorStop(1, 'rgba(65,170,255,0)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   drawExplosionEffect(ctx) {
     if (this.failTimer <= 0) return;
     const duration = 0.50;
@@ -1601,9 +1687,24 @@ export class JetDriftGame {
         ctx.save();
         ctx.globalAlpha = clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
         ctx.translate(shipX, shipY);
-        ctx.rotate(t * 0.22);
+        ctx.rotate((t * t) * TAU * 2.35);
         ctx.scale(shrink, shrink);
         ctx.translate(-startX, -startY);
+        this.drawPlayer(ctx);
+        ctx.restore();
+      } else if (this.warpOutTimer > 0) {
+        const duration = 0.72;
+        const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
+        const emerge = 1 - Math.pow(1 - t, 3);
+        const cx = this.width * 0.5;
+        const cy = this.height * 0.5;
+        const scale = 0.10 + emerge * 0.90;
+        ctx.save();
+        ctx.globalAlpha = clamp(t * 2.2, 0, 1);
+        ctx.translate(cx, cy);
+        ctx.rotate((1 - emerge) * TAU * 2.1);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
         this.drawPlayer(ctx);
         ctx.restore();
       } else {
@@ -1611,11 +1712,12 @@ export class JetDriftGame {
       }
     }
 
-    if (this.clearTimer <= 0) {
+    if (this.clearTimer <= 0 && this.warpOutTimer <= 0) {
       this.drawDirectionCue(ctx);
       this.drawMinimap(ctx);
       this.drawCrisisOverlay(ctx);
     }
+    this.drawWarpOutEffect(ctx);
     this.drawExplosionEffect(ctx);
     this.drawWarpEffect(ctx);
   }
