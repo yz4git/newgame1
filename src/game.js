@@ -722,9 +722,9 @@ export class JetDriftGame {
     this.player.y = 0;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.angle = Math.atan2(this.stage.portal.y, this.stage.portal.x);
-    this.aimX = this.stage.startAim.x;
-    this.aimY = this.stage.startAim.y;
+    this.player.angle = 0;
+    this.aimX = -Math.cos(this.player.angle);
+    this.aimY = -Math.sin(this.player.angle);
     this.fuel = this.stage.fuelStart;
     this.timeLeft = this.stage.time;
     this.failTimer = 0;
