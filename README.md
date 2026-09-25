@@ -137,3 +137,12 @@ https://yz4git.github.io/newgame1/latest.html
 - STICKとJETを、従来位置からスティック約1個分上へ移動
 - iPhone向けの小画面では104px、通常レイアウトでは約118px上へ移動
 - サウンド/ポーズのutilityも同じ操作クラスターに合わせて上へ移動
+
+## v1.5.2 — Control Position / Title Start Hitbox
+
+- STICKとJETをv1.5.1位置から約0.5スティック分下へ調整
+- 通常レイアウト: STICK bottom 79px / JET bottom 84px
+- 小画面: STICK bottom 67px / JET bottom 72px
+- タイトルのSTARTボタンは見た目と実タップ矩形を同じ固定サイズへ統一
+- iPhone Safariでズレ要因になり得る押下時transformを廃止
+- タイトル本文のpointer hitを無効化し、STARTと更新リンクだけを操作対象に限定
