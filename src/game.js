@@ -155,56 +155,397 @@ function createStage(index) {
   };
 }
 
+
+const CHIP_MINOR = [0, 2, 3, 5, 7, 8, 10];
+const CHIP_MELODY_SHAPES = [
+  [0, null, 2, null, 4, null, 5, 4, 2, null, 1, null, 2, 4, 2, null],
+  [0, 2, null, 3, 4, null, 2, 1, 0, null, 4, null, 3, 2, 1, null],
+  [0, null, 4, 3, 2, null, 5, null, 4, 2, 1, null, 3, 2, 0, null],
+  [0, 1, 2, null, 4, 3, 2, null, 5, 4, 3, 2, 1, null, 0, null],
+];
+
+class ChipRng {
+  constructor(seed) { this.state = seed >>> 0 || 0x6d2b79f5; }
+  next() {
+    let t = this.state = (this.state + 0x6d2b79f5) >>> 0;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  int(max) { return Math.floor(this.next() * max); }
+  pick(items) { return items[Math.min(items.length - 1, this.int(items.length))]; }
+}
+
+function chipScaleMidi(root, scale, degree) {
+  const octave = Math.floor(degree / scale.length);
+  const index = ((degree % scale.length) + scale.length) % scale.length;
+  return root + scale[index] + octave * 12;
+}
+
+function chipTone(events, channel, start, duration, midi, volume, duty, endMidi) {
+  const event = { channel, start, duration, midi, volume };
+  if (duty !== undefined) event.duty = duty;
+  if (endMidi !== undefined) event.endMidi = endMidi;
+  events.push(event);
+}
+
+function chipNoise(events, start, duration, volume, noiseKind, noiseRate = 1) {
+  events.push({ channel: 'noise', start, duration, volume, noiseKind, noiseRate });
+}
+
+function generateJetDriftBgm() {
+  const intensity = 0.68;
+  const seed = 0x4a455444;
+  const bpm = 164;
+  const bars = 4;
+  const rootMidi = 57;
+  const progression = [0, 5, 6, 4];
+  const melodyDensity = 0.78;
+  const duty = 0.25;
+  const rng = new ChipRng((seed ^ ('battle'.length * 0x9e3779b9)) >>> 0);
+  const step = 60 / bpm / 4;
+  const barDuration = step * 16;
+  const duration = bars * barDuration;
+  const events = [];
+  const shape = rng.pick(CHIP_MELODY_SHAPES);
+  const shapeShift = rng.int(CHIP_MINOR.length);
+  const leadRoot = rootMidi + 12 + (rng.next() > 0.72 ? 12 : 0);
+  const leadVolume = 0.16 + intensity * 0.1;
+  const pulse2Volume = 0.13 + intensity * 0.08;
+
+  for (let bar = 0; bar < bars; bar += 1) {
+    const barStart = bar * barDuration;
+    const chordRootDegree = progression[bar % progression.length];
+    const variation = bar >= Math.max(2, Math.floor(bars / 2));
+
+    for (let localStep = 0; localStep < 16; localStep += 1) {
+      const shapeDegree = shape[localStep];
+      if (shapeDegree === null || rng.next() > melodyDensity + intensity * 0.2) continue;
+      let degree = shapeDegree + shapeShift + chordRootDegree;
+      if (variation && localStep >= 8 && rng.next() > 0.55) degree += rng.next() > 0.5 ? 1 : -1;
+      const midi = chipScaleMidi(leadRoot, CHIP_MINOR, degree);
+      const lengthSteps = rng.next() > 0.76 ? 2 : 1;
+      chipTone(events, 'pulse1', barStart + localStep * step, step * lengthSteps * 0.88, midi, leadVolume, duty);
+    }
+
+    const chordDegrees = [chordRootDegree, chordRootDegree + 2, chordRootDegree + 4, chordRootDegree + 2];
+    for (let localStep = 0; localStep < 16; localStep += 2) {
+      const arpIndex = Math.floor(localStep / 2) % chordDegrees.length;
+      const degree = chordDegrees[arpIndex];
+      const midi = chipScaleMidi(rootMidi + 12, CHIP_MINOR, degree + (bar % 2 === 1 && arpIndex === 2 ? 7 : 0));
+      chipTone(events, 'pulse2', barStart + localStep * step, step * 2 * 0.72, midi, pulse2Volume, 0.125);
+    }
+
+    const bassPattern = [0, 4, 0, 5];
+    for (let beat = 0; beat < 4; beat += 1) {
+      const midi = chipScaleMidi(rootMidi - 12, CHIP_MINOR, chordRootDegree + bassPattern[beat]);
+      chipTone(events, 'triangle', barStart + beat * 4 * step, step * 2.9, midi, 0.13 + 0.82 * 0.09 + intensity * 0.04);
+      if (intensity > 0.55 && beat < 3) {
+        const nextMidi = chipScaleMidi(rootMidi - 12, CHIP_MINOR, chordRootDegree + (beat % 2 === 0 ? 4 : 0));
+        chipTone(events, 'triangle', barStart + (beat * 4 + 2) * step, step * 1.6, nextMidi, 0.1 + intensity * 0.05);
+      }
+    }
+
+    const drum = 0.84 * (0.55 + intensity * 0.65);
+    for (let localStep = 0; localStep < 16; localStep += 1) {
+      const when = barStart + localStep * step;
+      if (localStep % 4 === 0) chipNoise(events, when, step * 0.75, 0.12 + drum * 0.09, 'kick', 0.72);
+      if (localStep === 4 || localStep === 12) chipNoise(events, when, step * 0.86, 0.11 + drum * 0.1, 'snare', 1.1);
+      if (localStep % 2 === 0 && rng.next() < 0.5 + drum * 0.42) {
+        chipNoise(events, when, step * 0.34, 0.045 + drum * 0.05, 'hat', 1.5 + intensity * 0.5);
+      }
+    }
+  }
+
+  events.sort((a, b) => a.start - b.start);
+  return { version: 'sound-wave-eight-bit-v1', kind: 'bgm', purpose: 'battle', loop: true, duration, bpm, bars, seed, intensity, events };
+}
+
+function generateJetDriftSfx(purpose, intensity, seed) {
+  const rng = new ChipRng((seed ^ (purpose.length * 0x85ebca6b)) >>> 0);
+  const events = [];
+  const v = 0.17 + intensity * 0.12;
+  let duration = 0.35;
+
+  if (purpose === 'pickup') {
+    duration = 0.42;
+    [76, 83, 88].forEach((midi, index) => {
+      chipTone(events, index === 1 ? 'pulse2' : 'pulse1', index * 0.08, 0.12, midi + rng.int(2), v * (0.88 + index * 0.05), index === 1 ? 0.125 : 0.25);
+    });
+  } else if (purpose === 'magic') {
+    duration = 0.62;
+    [60, 67, 72, 79, 84, 91].forEach((midi, index) => {
+      chipTone(events, index % 2 === 0 ? 'pulse1' : 'pulse2', index * 0.055, 0.15, midi + rng.int(4), v * 0.82, index % 3 === 0 ? 0.125 : 0.25);
+    });
+    chipNoise(events, 0.12, 0.26, v * 0.42, 'metal', 2.2);
+  } else if (purpose === 'explosion') {
+    duration = 0.82;
+    chipNoise(events, 0, 0.68, v * 1.28, 'burst', 0.58 + intensity * 0.35);
+    chipNoise(events, 0.08, 0.42, v * 0.8, 'snare', 0.42);
+    chipTone(events, 'triangle', 0, 0.52, 45, v * 0.65, undefined, 24);
+  } else if (purpose === 'damage') {
+    duration = 0.42;
+    chipTone(events, 'pulse1', 0, 0.29, 69 + rng.int(4), v, 0.125, 36 + rng.int(5));
+    chipTone(events, 'pulse2', 0.035, 0.22, 63, v * 0.72, 0.125, 41);
+    chipNoise(events, 0, 0.21, v * 0.82, 'metal', 0.7 + intensity * 0.8);
+  } else if (purpose === 'critical') {
+    duration = 0.48;
+    chipNoise(events, 0, 0.11, v * 1.2, 'burst', 1.7);
+    [72, 79, 84, 91].forEach((midi, index) => {
+      chipTone(events, index % 2 === 0 ? 'pulse1' : 'pulse2', index * 0.065, 0.12, midi + rng.int(3), v, index % 2 === 0 ? 0.125 : 0.25);
+    });
+    chipTone(events, 'triangle', 0.015, 0.23, 43, v * 0.58, undefined, 31);
+  }
+
+  return { version: 'sound-wave-eight-bit-v1', kind: 'sfx', purpose, loop: false, duration, bpm: 0, bars: 0, seed, intensity, events };
+}
+
+const JET_DRIFT_8BIT = {
+  bgm: generateJetDriftBgm(),
+  warp: generateJetDriftSfx('magic', 0.88, 0x57415250),
+  clear: generateJetDriftSfx('critical', 0.72, 0x434c4541),
+  explosion: generateJetDriftSfx('explosion', 0.92, 0x424f4f4d),
+  pickup: generateJetDriftSfx('pickup', 0.72, 0x4655454c),
+  warning: generateJetDriftSfx('damage', 0.50, 0x5741524e),
+};
+
+function chipMidiToHz(midi) {
+  return 440 * 2 ** ((midi - 69) / 12);
+}
+
+function makeChipPulseWave(context, duty) {
+  const harmonics = 32;
+  const real = new Float32Array(harmonics + 1);
+  const imag = new Float32Array(harmonics + 1);
+  for (let n = 1; n <= harmonics; n += 1) {
+    const phase = Math.PI * 2 * n * duty;
+    real[n] = (2 / (Math.PI * n)) * Math.sin(phase);
+    imag[n] = (2 / (Math.PI * n)) * (1 - Math.cos(phase));
+  }
+  return context.createPeriodicWave(real, imag, { disableNormalization: false });
+}
+
+function makeChipNoiseBuffer(context, metallic) {
+  const length = 4096;
+  const buffer = context.createBuffer(1, length, context.sampleRate);
+  const data = buffer.getChannelData(0);
+  let lfsr = metallic ? 0x5d : 0x5a5d;
+  for (let i = 0; i < length; i += 1) {
+    const bit = ((lfsr >> 0) ^ (lfsr >> 1)) & 1;
+    lfsr = metallic
+      ? ((lfsr >> 1) | (bit << 6)) & 0x7f
+      : ((lfsr >> 1) | (bit << 14)) & 0x7fff;
+    data[i] = (lfsr & 1) === 0 ? -1 : 1;
+  }
+  return buffer;
+}
+
+const chipGraphCache = new WeakMap();
+
+function chipCacheFor(context) {
+  const cached = chipGraphCache.get(context);
+  if (cached) return cached;
+  const created = {
+    pulse125: makeChipPulseWave(context, 0.125),
+    pulse25: makeChipPulseWave(context, 0.25),
+    pulse50: makeChipPulseWave(context, 0.5),
+    noise: makeChipNoiseBuffer(context, false),
+    metalNoise: makeChipNoiseBuffer(context, true),
+  };
+  chipGraphCache.set(context, created);
+  return created;
+}
+
+function chipPulseWave(cache, duty) {
+  if (duty === 0.125) return cache.pulse125;
+  if (duty === 0.5) return cache.pulse50;
+  return cache.pulse25;
+}
+
+function chipNoiseFilter(context, kind) {
+  const filter = context.createBiquadFilter();
+  if (kind === 'kick') {
+    filter.type = 'lowpass'; filter.frequency.value = 980; filter.Q.value = 0.6;
+  } else if (kind === 'snare') {
+    filter.type = 'bandpass'; filter.frequency.value = 2100; filter.Q.value = 0.55;
+  } else if (kind === 'hat') {
+    filter.type = 'highpass'; filter.frequency.value = 5200; filter.Q.value = 0.45;
+  } else if (kind === 'metal') {
+    filter.type = 'bandpass'; filter.frequency.value = 3200; filter.Q.value = 2.2;
+  } else {
+    filter.type = 'bandpass'; filter.frequency.value = 1250; filter.Q.value = 0.42;
+  }
+  return filter;
+}
+
+function trackChipNode(nodes, node) {
+  if (!nodes) return;
+  nodes.add(node);
+  node.addEventListener('ended', () => nodes.delete(node), { once: true });
+}
+
+function scheduleChipEvent(context, destination, event, offset, nodes) {
+  const start = offset + event.start;
+  const end = start + Math.max(event.channel === 'noise' ? 0.012 : 0.015, event.duration);
+  const cache = chipCacheFor(context);
+
+  if (event.channel === 'noise') {
+    const source = context.createBufferSource();
+    source.buffer = event.noiseKind === 'metal' ? cache.metalNoise : cache.noise;
+    source.loop = true;
+    source.playbackRate.value = clamp(event.noiseRate ?? 1, 0.2, 4);
+    const filter = chipNoiseFilter(context, event.noiseKind);
+    const gain = context.createGain();
+    const volume = clamp(event.volume, 0, 0.5);
+    const attack = Math.min(0.004, event.duration * 0.12);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), start + Math.max(0.001, attack));
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(destination);
+    source.start(start);
+    source.stop(end + 0.004);
+    trackChipNode(nodes, source);
+    return;
+  }
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  if (event.channel === 'triangle') oscillator.type = 'triangle';
+  else oscillator.setPeriodicWave(chipPulseWave(cache, event.duty));
+  const startHz = chipMidiToHz(event.midi);
+  oscillator.frequency.setValueAtTime(startHz, start);
+  if (event.endMidi !== undefined) {
+    oscillator.frequency.exponentialRampToValueAtTime(
+      Math.max(20, chipMidiToHz(event.endMidi)),
+      Math.max(start + 0.01, end - 0.006),
+    );
+  }
+  const attack = Math.min(0.006, event.duration * 0.16);
+  const release = Math.min(0.025, event.duration * 0.28);
+  const volume = clamp(event.volume, 0, 0.45);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, volume), start + Math.max(0.002, attack));
+  gain.gain.setValueAtTime(Math.max(0.0002, volume * 0.9), Math.max(start + attack, end - release));
+  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+  oscillator.connect(gain);
+  gain.connect(destination);
+  oscillator.start(start);
+  oscillator.stop(end + 0.004);
+  trackChipNode(nodes, oscillator);
+}
+
+function scheduleChipComposition(context, destination, composition, offset, nodes) {
+  for (const event of composition.events) scheduleChipEvent(context, destination, event, offset, nodes);
+}
+
 class AudioBus {
   constructor() {
-    this.ctx = null;
     this.enabled = true;
+    this.ctx = null;
+    this.master = null;
+    this.musicBus = null;
+    this.sfxBus = null;
     this.jetOsc = null;
     this.jetGain = null;
+    this.musicNodes = new Set();
+    this.sfxNodes = new Set();
+    this.musicTimer = 0;
+    this.musicNextTime = 0;
   }
 
   async unlock() {
     if (!this.enabled) return;
     try {
-      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (!this.ctx) {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        this.master = this.ctx.createGain();
+        this.musicBus = this.ctx.createGain();
+        this.sfxBus = this.ctx.createGain();
+        const compressor = this.ctx.createDynamicsCompressor();
+        this.master.gain.value = 0.78;
+        this.musicBus.gain.value = 0.22;
+        this.sfxBus.gain.value = 0.76;
+        compressor.threshold.value = -8;
+        compressor.knee.value = 4;
+        compressor.ratio.value = 4;
+        compressor.attack.value = 0.002;
+        compressor.release.value = 0.08;
+        this.musicBus.connect(this.master);
+        this.sfxBus.connect(this.master);
+        this.master.connect(compressor);
+        compressor.connect(this.ctx.destination);
+      }
       if (this.ctx.state === 'suspended') await this.ctx.resume();
     } catch {
       this.ctx = null;
     }
   }
 
-  setEnabled(v) {
-    this.enabled = v;
-    if (!v) this.stopJet();
-    else this.unlock();
+  setEnabled(value) {
+    this.enabled = value;
+    if (value) {
+      void this.unlock();
+    } else {
+      this.stopJet();
+      this.stopMusic();
+      this.ctx?.suspend?.().catch(() => {});
+    }
   }
 
-  tone(freq, duration, type = 'sine', gain = 0.03, endFreq = null) {
-    if (!this.enabled || !this.ctx || this.ctx.state !== 'running') return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const amp = this.ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, now);
-    if (endFreq) osc.frequency.exponentialRampToValueAtTime(Math.max(25, endFreq), now + duration);
-    amp.gain.setValueAtTime(0.0001, now);
-    amp.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-    amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    osc.connect(amp).connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + duration + 0.04);
+  async startMusic() {
+    if (!this.enabled) return;
+    await this.unlock();
+    if (!this.ctx || !this.musicBus || this.musicTimer) return;
+    this.musicNextTime = this.ctx.currentTime + 0.04;
+    this.scheduleMusicAhead();
+    this.musicTimer = window.setInterval(() => this.scheduleMusicAhead(), 350);
+  }
+
+  scheduleMusicAhead() {
+    if (!this.ctx || !this.musicBus || !this.enabled) return;
+    while (this.musicNextTime < this.ctx.currentTime + 1.35) {
+      scheduleChipComposition(this.ctx, this.musicBus, JET_DRIFT_8BIT.bgm, this.musicNextTime, this.musicNodes);
+      this.musicNextTime += JET_DRIFT_8BIT.bgm.duration;
+    }
+  }
+
+  stopMusic() {
+    if (this.musicTimer) window.clearInterval(this.musicTimer);
+    this.musicTimer = 0;
+    for (const node of this.musicNodes) {
+      try { node.stop(); } catch {}
+      try { node.disconnect(); } catch {}
+    }
+    this.musicNodes.clear();
+  }
+
+  stopSfx() {
+    for (const node of this.sfxNodes) {
+      try { node.stop(); } catch {}
+      try { node.disconnect(); } catch {}
+    }
+    this.sfxNodes.clear();
+  }
+
+  async playSfx(composition, delay = 0) {
+    if (!this.enabled) return;
+    await this.unlock();
+    if (!this.ctx || !this.sfxBus) return;
+    scheduleChipComposition(this.ctx, this.sfxBus, composition, this.ctx.currentTime + 0.012 + delay, this.sfxNodes);
   }
 
   startJet() {
-    if (!this.enabled || !this.ctx || this.ctx.state !== 'running' || this.jetOsc) return;
+    if (!this.enabled || !this.ctx || this.ctx.state !== 'running' || this.jetOsc || !this.sfxBus) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const amp = this.ctx.createGain();
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(78, now);
     amp.gain.setValueAtTime(0.0001, now);
-    amp.gain.exponentialRampToValueAtTime(0.018, now + 0.035);
-    osc.connect(amp).connect(this.ctx.destination);
+    amp.gain.exponentialRampToValueAtTime(0.014, now + 0.035);
+    osc.connect(amp).connect(this.sfxBus);
     osc.start(now);
     this.jetOsc = osc;
     this.jetGain = amp;
@@ -226,26 +567,22 @@ class AudioBus {
   }
 
   pickup() {
-    this.tone(520, 0.14, 'sine', 0.025, 880);
+    void this.playSfx(JET_DRIFT_8BIT.pickup);
   }
 
   fail() {
     this.stopJet();
-    this.tone(125, 0.16, 'square', 0.022, 58);
+    void this.playSfx(JET_DRIFT_8BIT.explosion);
   }
 
   warp() {
     this.stopJet();
-    this.tone(330, 0.20, 'sine', 0.025, 720);
-    setTimeout(() => this.tone(660, 0.17, 'sine', 0.02, 980), 55);
+    void this.playSfx(JET_DRIFT_8BIT.warp);
+    void this.playSfx(JET_DRIFT_8BIT.clear, 0.18);
   }
 
-  warning(kind = 'time') {
-    if (kind === 'fuel') {
-      this.tone(210, 0.10, 'square', 0.014, 155);
-      return;
-    }
-    this.tone(760, 0.08, 'square', 0.012, 520);
+  warning() {
+    void this.playSfx(JET_DRIFT_8BIT.warning);
   }
 }
 
@@ -294,7 +631,10 @@ export class JetDriftGame {
   setOnChange(fn) { this.onChange = fn || (() => {}); }
   setToastCallback(fn) { this.onToast = fn || (() => {}); }
   setFxCallback(fn) { this.onFx = fn || (() => {}); }
-  setAudioEnabled(v) { this.audio.setEnabled(v); }
+  setAudioEnabled(v) {
+    this.audio.setEnabled(v);
+    if (v && this.state === 'playing') void this.audio.startMusic();
+  }
   unlockAudio() { this.audio.unlock(); }
 
   loadRecords() {
@@ -333,6 +673,7 @@ export class JetDriftGame {
     this.score = 0;
     this.attempts = 0;
     this.startStage(0, true);
+    void this.audio.startMusic();
     this.onChange('start', this.getSnapshot());
   }
 
@@ -342,6 +683,7 @@ export class JetDriftGame {
 
   returnToTitle() {
     this.audio.stopJet();
+    this.audio.stopMusic();
     this.state = 'title';
     this.paused = false;
     this.thrusting = false;
@@ -354,6 +696,9 @@ export class JetDriftGame {
     if (this.paused) {
       this.thrusting = false;
       this.audio.stopJet();
+      this.audio.stopMusic();
+    } else {
+      void this.audio.startMusic();
     }
     this.onChange(this.paused ? 'pause' : 'resume', this.getSnapshot());
   }
@@ -379,6 +724,7 @@ export class JetDriftGame {
     this.fuelCriticalWarned = false;
     this.thrusting = false;
     this.audio.stopJet();
+    this.audio.stopSfx();
     if (!silent) {
       this.onToast('STAGE ' + String(index + 1).padStart(index >= 24 ? 3 : 2, '0') + ' · ' + this.stage.title, this.stage.hint);
     }

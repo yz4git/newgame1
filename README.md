@@ -89,3 +89,21 @@ https://yz4git.github.io/newgame1/latest.html
 - FUEL危険時は燃料パネルを点滅させ、画面下部にも大きな警告
 - TIME/FUEL閾値到達時に短い警告音とハプティクス
 - マップ外へ出てもミニマップの自機マーカーは外周へクランプ表示
+
+## v1.3 — SOUND WAVE 8BIT Studio Audio
+
+`yz4git/sound-wave` の 8BIT Studio 実装を参照し、同じ `sound-wave-eight-bit-v1` 4ch方式をJET DRIFTへ導入。
+
+- BGM: BATTLE系 164 BPM / 4 bars / 約5.85秒ループ
+- PULSE1 / PULSE2 / TRIANGLE / NOISE の4chチップ構成
+- ステージを跨いでBGMを連続再生
+- ワープ: MAGIC + CRITICAL
+- 爆発: EXPLOSION
+- 燃料取得: PICKUP
+- TIME / FUEL警告: DAMAGE
+- BGMとSEは決定論的seedで毎回同じ音
+- WAV外部読み込みなし。Web Audioで8BIT Studioイベントを直接スケジュール
+- FAIL後の次試行開始時に前のSEを停止し、爆発音の尾が次ステージへ残らない
+- JET持続音のみ、操作フィードバック優先で従来の連続oscillatorを維持
+
+再現用の設定は `docs/jet-drift-8bit-audio.md` に記録。
