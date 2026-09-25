@@ -3,101 +3,84 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#070809" />
-  <meta name="description" content="船体を指で切り、切り落とした質量の反動だけで速度と回転を操ってドックへ到達する無重力アクション。" />
+  <meta name="theme-color" content="#02050b" />
+  <meta name="description" content="スティックで噴射口を向け、JETで慣性を制御しながら短時間でワープ口を目指す宇宙アクション。" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg?v=__BUILD_ID__" />
   <link rel="manifest" href="./manifest.webmanifest?v=__BUILD_ID__" />
   <link rel="stylesheet" href="./src/styles.css?v=__BUILD_ID__" />
-  <title>VECTOR CUT — Shape the Drift</title>
+  <title>JET DRIFT — Inertia Run</title>
 </head>
 <body>
   <main id="app" class="app">
-    <canvas id="gameCanvas" aria-label="VECTOR CUT ゲーム画面。船体を横切るようにドラッグして切断し、反動でコアをドックへ運びます。"></canvas>
+    <canvas id="gameCanvas" aria-label="JET DRIFTゲーム画面。プレイヤーは画面中央に固定され、宇宙空間がスクロールします。"></canvas>
 
     <div id="hud" class="hud" hidden>
-      <div class="hud-top">
-        <section class="hud-card" aria-label="残存質量と切断数">
-          <span class="eyebrow">HULL STATE</span>
-          <div class="metric-row">
-            <div><span>MASS</span><strong id="massValue">100%</strong></div>
-            <div><span>CUTS</span><strong id="cutsValue">00</strong></div>
-          </div>
+      <div class="hud-top-left">
+        <section class="hud-card stage-card">
+          <span id="stageNumber" class="eyebrow">STAGE 01 / 24</span>
+          <strong id="stageName">DRIFT LINE</strong>
+          <span id="stageHint">スティック方向にノズル。JETで反対方向へ加速</span>
         </section>
-
-        <section class="chamber-card" aria-label="現在のチャンバー">
-          <span id="chamberNumber" class="eyebrow">CHAMBER 01 / 05</span>
-          <strong id="chamberName">FIRST RECOIL</strong>
-          <span id="chamberHint">船体を横切るようにドラッグ</span>
+        <section class="hud-card stat-card">
+          <span class="eyebrow">TIME</span>
+          <strong id="timeValue">10.0</strong>
         </section>
-
-        <section class="hud-card score-card" aria-label="スコア">
-          <span class="eyebrow">FAB SCORE</span>
+        <section class="hud-card stat-card">
+          <span class="eyebrow">SPEED</span>
+          <strong id="speedValue">000</strong>
+        </section>
+        <section class="hud-card stat-card score-card">
+          <span class="eyebrow">SCORE</span>
           <strong id="scoreValue">000000</strong>
-          <small id="objectiveValue">LESS MASS LOST · FEWER CUTS</small>
         </section>
       </div>
 
-      <div class="hud-bottom">
-        <div class="left-cluster">
-          <div class="hud-actions">
-            <button id="soundButton" class="icon-button" type="button" aria-label="サウンドをオフにする" title="サウンド">♪</button>
-            <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止" title="一時停止">Ⅱ</button>
-          </div>
-          <section class="telemetry-card" aria-label="速度と回転">
-            <div><span class="eyebrow">SPEED</span><strong id="speedValue">000</strong></div>
-            <div><span class="eyebrow">SPIN</span><strong id="spinValue">+0.00</strong></div>
-          </section>
-        </div>
-        <section class="telemetry-card time-card" aria-label="残り時間">
-          <div><span class="eyebrow">WINDOW</span><strong id="timeValue">48</strong></div>
-        </section>
-      </div>
+      <section class="fuel-panel" aria-label="噴射燃料">
+        <div class="fuel-label"><span>JET FUEL</span><strong id="fuelValue">100%</strong></div>
+        <div class="fuel-track"><div id="fuelFill" class="fuel-fill"></div></div>
+      </section>
 
-      <div class="control-hint"><b>DRAG THROUGH HULL</b> CUT　／　<b>GREEN ARROW</b> RECOIL PREVIEW</div>
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </div>
 
+    <div class="controls" aria-label="ゲーム操作">
+      <div id="stick" class="stick" aria-label="噴射口方向スティック">
+        <div id="stickKnob" class="stick-knob"></div>
+        <span class="stick-label">NOZZLE</span>
+      </div>
+      <button id="jetButton" class="jet-button" type="button" aria-label="ジェット噴射">JET</button>
+      <div class="utility">
+        <button id="soundButton" class="icon-button" type="button" aria-label="サウンド切替">♪</button>
+        <button id="pauseButton" class="icon-button" type="button" aria-label="一時停止">Ⅱ</button>
+      </div>
+    </div>
+
     <section id="titleScreen" class="screen title-screen">
-      <div class="title-topline"><span>ZERO-G FABRICATION TEST / BAY 05</span><span>THRUSTERS DISABLED</span></div>
+      <div class="title-topline"><span>INERTIA CONTROL / DEEP SPACE TEST</span><span>NO BRAKES · LIMITED FUEL</span></div>
       <div class="title-content">
-        <div class="title-kicker"><i aria-hidden="true"></i> MASS-RECOIL ACTION</div>
-        <h1>VECTOR <span>CUT</span></h1>
-        <p class="title-jp">切る。軽くなる。反動で飛ぶ。</p>
-        <p class="title-desc">推進器はない。船体を切った反動で進み、赤い切断片そのものも仕掛けへ飛ばして使う。<br />ルールは一つ。コアがGOALへ入れば即クリア。ゲートや壁へ当たれば即FAILし、約0.5秒で同じ面へ自動リトライ。</p>
-        <button id="startButton" class="primary-button" type="button"><span>FAB TESTを開始</span><i aria-hidden="true">／</i></button>
+        <div class="title-kicker"><i aria-hidden="true"></i> ZERO-G MOMENTUM ACTION</div>
+        <h1>JET <span>DRIFT</span></h1>
+        <p class="title-jp">噴射して、流して、ワープへ飛び込む。</p>
+        <p class="title-desc">左スティックで噴射口の向きを決める。JETを押すとその反対方向へ加速。<br />プレイヤーは画面中心、宇宙がスクロール。燃料と慣性を読み、数秒でワープ口へ到達しよう。</p>
+        <button id="startButton" class="primary-button" type="button"><span>JET RUNを開始</span><i aria-hidden="true">▶</i></button>
         <div class="control-summary">
-          <span><b>DRAG</b> 船体を横切ってCUT</span>
-          <span><b>PREVIEW</b> 緑=自機 / 赤=切断片の1秒後までを見る</span>
-          <span><b>GOAL</b> コアが入れば即クリア</span>
+          <span><b>STICK</b> 噴射口を向ける</span>
+          <span><b>JET</b> 押している間だけ噴射</span>
+          <span><b>WARP</b> 入れば即クリア</span>
+          <span><b>FUEL</b> 緑アイテムで回復</span>
         </div>
         <a class="fresh-link" href="./latest.html?v=__BUILD_ID__">更新が反映されない場合</a>
       </div>
-      <div class="title-bottomline"><span>FAST CLEAR / INSTANT FAIL / AUTO RETRY → ENDLESS</span><span id="bestReadout">BEST —</span></div>
+      <div class="title-bottomline"><span>24 STAGES → AUTO-GENERATED ENDLESS</span><span id="bestReadout">FURTHEST —</span></div>
     </section>
 
     <section id="pauseScreen" class="screen pause-screen" hidden>
       <div class="modal-panel">
-        <span class="eyebrow">SIMULATION HOLD</span>
-        <h2>FAB TEST停止中</h2>
-        <p>速度・回転・切断前の形をそのまま保持しています。</p>
-        <button id="resumeButton" class="primary-button" type="button"><span>テストを再開</span><i aria-hidden="true">▶</i></button>
-        <button id="restartButton" class="text-button" type="button">CHAMBER 01からやり直す</button>
-      </div>
-    </section>
-
-    <section id="resultScreen" class="screen result-screen" hidden>
-      <div class="result-panel">
-        <span id="resultEyebrow" class="eyebrow">FABRICATION RUN COMPLETE</span>
-        <h2 id="resultTitle">LOCK ACHIEVED</h2>
-        <p id="resultSubtitle">切断だけで全ドックへ到達した。</p>
-        <div class="result-stats">
-          <div><span>FINAL SCORE</span><strong id="resultScore">000000</strong></div>
-          <div><span>TOTAL CUTS</span><strong id="resultCuts">0</strong></div>
-          <div><span>FINAL MASS</span><strong id="resultMass">100%</strong></div>
-        </div>
-        <p id="recordNotice" class="record-notice" hidden>NEW BEST SCORE</p>
-        <button id="continueButton" class="primary-button" type="button"><span>このCHAMBERからコンティニュー</span><i aria-hidden="true">▶</i></button>
-        <button id="againButton" class="text-button" type="button">CHAMBER 01からやり直す</button>
+        <span class="eyebrow">FLIGHT HOLD</span>
+        <h2>PAUSED</h2>
+        <p>慣性と燃料状態を保持しています。</p>
+        <button id="resumeButton" class="primary-button" type="button"><span>再開</span><i aria-hidden="true">▶</i></button>
+        <button id="restartButton" class="text-button" type="button">STAGE 01からやり直す</button>
         <button id="titleButton" class="text-button" type="button">タイトルへ</button>
       </div>
     </section>

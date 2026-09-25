@@ -1,7 +1,8 @@
 const BUILD_ID = '__BUILD_ID__';
-const CACHE_NAME = 'vector-cut-newgame1-' + BUILD_ID;
+const CACHE_NAME = 'jet-drift-newgame1-' + BUILD_ID;
 const BASE_URL = new URL('./', self.location.href);
 const OWNED_PREFIXES = [
+  'jet-drift-newgame1-',
   'vector-cut-newgame1-',
   'abyssal-echo-newgame1-',
   'midnight-junction-newgame1-',

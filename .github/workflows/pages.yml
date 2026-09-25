@@ -1,4 +1,4 @@
-name: Publish VECTOR CUT to GitHub Pages
+name: Publish JET DRIFT to GitHub Pages
 
 on:
   push:

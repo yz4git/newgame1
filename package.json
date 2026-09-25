@@ -1,6 +1,6 @@
 {
-  "name": "vector-cut",
-  "version": "1.4.0",
+  "name": "jet-drift",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {

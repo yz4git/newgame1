@@ -1,13 +1,13 @@
 {
-  "name": "VECTOR CUT — Shape the Drift",
-  "short_name": "VECTOR CUT",
-  "description": "CUT反動でCOREをGOALへ送る高速アクション。成功は即クリア、ゲート・壁接触は即FAIL、約0.5秒で同じ面を自動リトライ。",
+  "name": "JET DRIFT — Inertia Run",
+  "short_name": "JET DRIFT",
+  "description": "スティックで噴射口を向け、JETで慣性を制御しながら短時間でワープ口へ到達する宇宙アクション。",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#070809",
-  "theme_color": "#070809",
+  "background_color": "#02050b",
+  "theme_color": "#02050b",
   "icons": [
     {
       "src": "./icon.svg",
