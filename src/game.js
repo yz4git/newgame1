@@ -193,7 +193,7 @@ function chipNoise(events, start, duration, volume, noiseKind, noiseRate = 1) {
   events.push({ channel: 'noise', start, duration, volume, noiseKind, noiseRate });
 }
 
-function generateJetDriftBgm(bpm = 132) {
+function generateJetDriftBgm(bpm = 120) {
   const intensity = 0.68;
   const seed = 0x53504143;
   const bars = 4;
@@ -300,7 +300,7 @@ function generateJetDriftSfx(purpose, intensity, seed) {
 }
 
 const JET_DRIFT_8BIT = {
-  bgmSlow: generateJetDriftBgm(132),
+  bgmSlow: generateJetDriftBgm(120),
   bgmFast: generateJetDriftBgm(164),
   warp: generateJetDriftSfx('magic', 0.88, 0x57415250),
   clear: generateJetDriftSfx('critical', 0.72, 0x434c4541),
