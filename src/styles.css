@@ -202,3 +202,22 @@ button{font:inherit}
   .time-card{min-width:86px}
   #timeValue{font-size:24px}
 }
+.fuel-panel.warning{
+  border-color:rgba(255,166,77,.72);
+  background:linear-gradient(145deg,rgba(70,35,10,.92),rgba(23,10,5,.88));
+  box-shadow:0 0 18px rgba(255,131,48,.22);
+}
+.fuel-panel.warning .fuel-label strong{color:#ffd09a}
+.fuel-panel.critical{
+  border-color:rgba(255,82,99,.94);
+  background:linear-gradient(145deg,rgba(88,13,24,.95),rgba(28,5,11,.92));
+  animation:fuelPulse .42s ease-in-out infinite alternate;
+}
+.fuel-panel.critical .fuel-label strong{
+  color:#fff;
+  text-shadow:0 0 12px #ff5368;
+}
+@keyframes fuelPulse{
+  from{transform:scale(1);box-shadow:0 0 14px rgba(255,68,88,.18)}
+  to{transform:scale(1.035);box-shadow:0 0 30px rgba(255,68,88,.48)}
+}

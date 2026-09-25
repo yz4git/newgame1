@@ -239,6 +239,14 @@ class AudioBus {
     this.tone(330, 0.20, 'sine', 0.025, 720);
     setTimeout(() => this.tone(660, 0.17, 'sine', 0.02, 980), 55);
   }
+
+  warning(kind = 'time') {
+    if (kind === 'fuel') {
+      this.tone(210, 0.10, 'square', 0.014, 155);
+      return;
+    }
+    this.tone(760, 0.08, 'square', 0.012, 520);
+  }
 }
 
 export class JetDriftGame {
@@ -263,6 +271,10 @@ export class JetDriftGame {
     this.strandedTimer = 0;
     this.globalTime = 0;
     this.hudTimer = 0;
+    this.timeWarned = false;
+    this.timeCriticalWarned = false;
+    this.fuelWarned = false;
+    this.fuelCriticalWarned = false;
     this.dpr = 1;
     this.width = 1;
     this.height = 1;
@@ -361,6 +373,10 @@ export class JetDriftGame {
     this.failTimer = 0;
     this.clearTimer = 0;
     this.strandedTimer = 0;
+    this.timeWarned = false;
+    this.timeCriticalWarned = false;
+    this.fuelWarned = false;
+    this.fuelCriticalWarned = false;
     this.thrusting = false;
     this.audio.stopJet();
     if (!silent) {
@@ -469,6 +485,16 @@ export class JetDriftGame {
     }
 
     this.timeLeft -= dt;
+    if (!this.timeWarned && this.timeLeft <= 4) {
+      this.timeWarned = true;
+      this.audio.warning('time');
+      this.onFx('warning');
+    }
+    if (!this.timeCriticalWarned && this.timeLeft <= 2.5) {
+      this.timeCriticalWarned = true;
+      this.audio.warning('time');
+      this.onFx('warningCritical');
+    }
     if (this.timeLeft <= 0) {
       this.timeLeft = 0;
       this.triggerFail('TIME OUT');
@@ -501,6 +527,17 @@ export class JetDriftGame {
       }
     }
 
+    if (!this.fuelWarned && this.fuel <= 25) {
+      this.fuelWarned = true;
+      this.audio.warning('fuel');
+      this.onFx('warning');
+    }
+    if (!this.fuelCriticalWarned && this.fuel <= 12) {
+      this.fuelCriticalWarned = true;
+      this.audio.warning('fuel');
+      this.onFx('warningCritical');
+    }
+
     p.vx += ax * dt;
     p.vy += ay * dt;
     const speed = Math.hypot(p.vx, p.vy);
@@ -525,14 +562,8 @@ export class JetDriftGame {
     }
 
     const portalDistance = Math.hypot(p.x - this.stage.portal.x, p.y - this.stage.portal.y);
-    if (portalDistance <= this.stage.portalRadius - p.r * 0.25) {
+    if (portalDistance <= this.stage.portalRadius + p.r * 0.35) {
       this.clearStage();
-      return;
-    }
-
-    const b = this.stage.bounds;
-    if (p.x < b.minX || p.x > b.maxX || p.y < b.minY || p.y > b.maxY) {
-      this.triggerFail('LOST IN SPACE');
       return;
     }
 
@@ -927,7 +958,11 @@ export class JetDriftGame {
     ctx.arc(portal.x, portal.y, 4, 0, TAU);
     ctx.stroke();
 
-    const me = toMini(this.player.x, this.player.y);
+    const meRaw = toMini(this.player.x, this.player.y);
+    const me = {
+      x: clamp(meRaw.x, x + 3, x + w - 3),
+      y: clamp(meRaw.y, y + 3, y + h - 3),
+    };
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(me.x, me.y, 3, 0, TAU);
@@ -1091,6 +1126,64 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawCrisisOverlay(ctx) {
+    if (this.failTimer > 0 || this.clearTimer > 0 || this.state !== 'playing') return;
+
+    const timeDanger = this.timeLeft <= 4;
+    const timeCritical = this.timeLeft <= 2.5;
+    const fuelDanger = this.fuel <= 25;
+    const fuelCritical = this.fuel <= 12;
+    if (!timeDanger && !fuelDanger) return;
+
+    const fast = timeCritical || fuelCritical;
+    const pulse = 0.5 + 0.5 * Math.sin(this.globalTime * (fast ? 11 : 6));
+    ctx.save();
+
+    if (timeDanger) {
+      const alpha = (timeCritical ? 0.14 : 0.06) + pulse * (timeCritical ? 0.10 : 0.035);
+      const vignette = ctx.createRadialGradient(
+        this.width * 0.5, this.height * 0.5, Math.min(this.width, this.height) * 0.20,
+        this.width * 0.5, this.height * 0.5, Math.max(this.width, this.height) * 0.70
+      );
+      vignette.addColorStop(0, 'rgba(255,42,62,0)');
+      vignette.addColorStop(1, `rgba(255,38,58,${alpha})`);
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, this.width, this.height);
+
+      ctx.textAlign = 'center';
+      ctx.font = `900 ${timeCritical ? 31 : 21}px ui-monospace, monospace`;
+      ctx.fillStyle = timeCritical
+        ? `rgba(255,248,249,${0.78 + pulse * 0.22})`
+        : `rgba(255,210,153,${0.72 + pulse * 0.18})`;
+      ctx.shadowColor = timeCritical ? '#ff344f' : '#ff9e42';
+      ctx.shadowBlur = timeCritical ? 20 : 10;
+      ctx.fillText(`TIME ${Math.max(0, this.timeLeft).toFixed(1)}`, this.width * 0.5, 45);
+      ctx.shadowBlur = 0;
+    }
+
+    if (fuelDanger) {
+      const y = this.height - 53;
+      ctx.textAlign = 'center';
+      ctx.font = `900 ${fuelCritical ? 25 : 18}px ui-monospace, monospace`;
+      ctx.fillStyle = fuelCritical
+        ? `rgba(255,246,236,${0.75 + pulse * 0.25})`
+        : `rgba(255,198,118,${0.68 + pulse * 0.18})`;
+      ctx.shadowColor = '#ff6f3f';
+      ctx.shadowBlur = fuelCritical ? 18 : 10;
+      ctx.fillText(fuelCritical ? 'FUEL CRITICAL' : 'FUEL LOW', this.width * 0.5, y);
+      ctx.shadowBlur = 0;
+
+      const bandAlpha = (fuelCritical ? 0.09 : 0.04) + pulse * (fuelCritical ? 0.07 : 0.025);
+      const g = ctx.createLinearGradient(0, this.height, 0, this.height * 0.56);
+      g.addColorStop(0, `rgba(255,86,42,${bandAlpha})`);
+      g.addColorStop(1, 'rgba(255,86,42,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, this.height * 0.54, this.width, this.height * 0.46);
+    }
+
+    ctx.restore();
+  }
+
   render() {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -1121,6 +1214,7 @@ export class JetDriftGame {
 
     this.drawDirectionCue(ctx);
     this.drawMinimap(ctx);
+    this.drawCrisisOverlay(ctx);
     this.drawExplosionEffect(ctx);
     this.drawWarpEffect(ctx);
   }

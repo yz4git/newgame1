@@ -11,6 +11,7 @@ const pauseScreen = $('pauseScreen');
 const stageNumber = $('stageNumber');
 const stageName = $('stageName');
 const stageHint = $('stageHint');
+const fuelPanel = $('fuelPanel');
 const fuelFill = $('fuelFill');
 const fuelValue = $('fuelValue');
 const timeValue = $('timeValue');
@@ -76,7 +77,11 @@ function syncHud(snapshot = game.getSnapshot()) {
   stageHint.textContent = snapshot.stageHint;
   fuelValue.textContent = Math.round(snapshot.fuel) + '%';
   fuelFill.style.width = clamp(snapshot.fuel, 0, 100) + '%';
-  fuelFill.classList.toggle('danger', snapshot.fuel < 24);
+  const fuelWarning = snapshot.fuel <= 25 && snapshot.fuel > 12;
+  const fuelCritical = snapshot.fuel <= 12;
+  fuelFill.classList.toggle('danger', fuelWarning || fuelCritical);
+  fuelPanel.classList.toggle('warning', fuelWarning);
+  fuelPanel.classList.toggle('critical', fuelCritical);
   timeValue.textContent = Math.max(0, snapshot.timeLeft).toFixed(1);
   const warning = snapshot.timeLeft <= 4 && snapshot.timeLeft > 2.5;
   const critical = snapshot.timeLeft <= 2.5;
@@ -143,6 +148,8 @@ game.setFxCallback((type) => {
   if (type === 'fail') navigator.vibrate([14, 20, 24]);
   else if (type === 'clear') navigator.vibrate([8, 20, 10, 28, 16]);
   else if (type === 'pickup') navigator.vibrate(8);
+  else if (type === 'warning') navigator.vibrate(7);
+  else if (type === 'warningCritical') navigator.vibrate([7, 26, 10]);
 });
 
 const records = game.getRecords();
