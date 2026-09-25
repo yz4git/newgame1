@@ -995,48 +995,59 @@ export class JetDriftGame {
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
-    const maxR = Math.hypot(this.width, this.height) * 0.62;
+    const diag = Math.hypot(this.width, this.height);
 
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
 
-    const tunnel = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-    tunnel.addColorStop(0, `rgba(220,252,255,${0.38 + t * 0.36})`);
-    tunnel.addColorStop(0.10 + t * 0.12, `rgba(79,215,255,${0.32 + t * 0.20})`);
-    tunnel.addColorStop(0.48, 'rgba(31,116,202,.08)');
-    tunnel.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = tunnel;
+    const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, diag * 0.62);
+    bg.addColorStop(0, `rgba(180,236,255,${0.10 + t * 0.18})`);
+    bg.addColorStop(0.28, `rgba(57,139,221,${0.08 + t * 0.16})`);
+    bg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, this.width, this.height);
 
-    for (let i = 0; i < 5; i += 1) {
-      const phase = (t * 1.7 + i / 5) % 1;
-      const r = 16 + phase * maxR;
-      ctx.strokeStyle = `rgba(128,235,255,${(1 - phase) * 0.72})`;
-      ctx.lineWidth = 2 + (1 - phase) * 3;
+    const count = 74;
+    const stretch = 26 + t * t * 360;
+    const spread = 18 + t * 34;
+    for (let i = 0; i < count; i += 1) {
+      const a = ((i * 137.508) % 360) * Math.PI / 180;
+      const seed = ((i * 47) % 97) / 97;
+      const base = 20 + seed * diag * 0.44;
+      const startR = base + t * spread * seed;
+      const endR = startR + stretch * (0.35 + seed * 0.95);
+      const x1 = cx + Math.cos(a) * startR;
+      const y1 = cy + Math.sin(a) * startR;
+      const x2 = cx + Math.cos(a) * endR;
+      const y2 = cy + Math.sin(a) * endR;
+      const alpha = clamp(0.16 + t * 0.72 - seed * 0.10, 0, 0.92);
+      ctx.strokeStyle = `rgba(${205 + Math.floor(seed * 40)},${232 + Math.floor(seed * 20)},255,${alpha})`;
+      ctx.lineWidth = 0.7 + seed * 1.8 + t * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    if (t > 0.18) {
+      const tunnelT = clamp((t - 0.18) / 0.52, 0, 1);
+      const r = 12 + tunnelT * Math.min(this.width, this.height) * 0.38;
+      const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      core.addColorStop(0, `rgba(245,253,255,${0.34 + tunnelT * 0.30})`);
+      core.addColorStop(0.12, `rgba(115,214,255,${0.22 + tunnelT * 0.20})`);
+      core.addColorStop(1, 'rgba(70,170,255,0)');
+      ctx.fillStyle = core;
       ctx.beginPath();
       ctx.arc(cx, cy, r, 0, TAU);
-      ctx.stroke();
+      ctx.fill();
     }
 
-    const streakCount = 26;
-    for (let i = 0; i < streakCount; i += 1) {
-      const a = i / streakCount * TAU + i * 0.37;
-      const inner = 28 + (i % 4) * 8;
-      const len = 70 + t * 190 + (i % 5) * 13;
-      const alpha = 0.20 + 0.42 * t;
-      ctx.strokeStyle = `rgba(178,243,255,${alpha})`;
-      ctx.lineWidth = 1 + (i % 3) * 0.6;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
-      ctx.lineTo(cx + Math.cos(a) * (inner + len), cy + Math.sin(a) * (inner + len));
-      ctx.stroke();
-    }
-
-    const white = clamp((t - 0.72) / 0.28, 0, 1);
-    if (white > 0) {
-      ctx.fillStyle = `rgba(225,252,255,${white * 0.82})`;
+    const flash = clamp((t - 0.76) / 0.24, 0, 1);
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(232,250,255,${flash * 0.90})`;
       ctx.fillRect(0, 0, this.width, this.height);
     }
+
     ctx.restore();
   }
 
@@ -1077,11 +1088,6 @@ export class JetDriftGame {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = `rgba(255,173,98,${1 - t})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 22 + ease * 98, 0, TAU);
-    ctx.stroke();
     ctx.restore();
   }
 
