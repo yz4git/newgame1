@@ -107,3 +107,14 @@ https://yz4git.github.io/newgame1/latest.html
 - JET持続音のみ、操作フィードバック優先で従来の連続oscillatorを維持
 
 再現用の設定は `docs/jet-drift-8bit-audio.md` に記録。
+
+## v1.4 — Title UI / Warp Target / Nozzle Cursor / New BGM Seed
+
+- タイトル画面では操作不能なSTICK / JET / utility UIを完全に非表示
+- PAUSE中も操作UIを非表示、再開時に復帰
+- 8BIT Studio BGM seedを `0x53504143` ("SPAC") へ変更
+- 噴射方向表示を四角い部品から、エンジンベル＋点火予兆フレアへ変更
+- JET未使用時でもノズル先端に小さな発光があり「ここから噴射する」と読める
+- ワープクリア時、自機は画面中央から実際のワープ口中心へ吸い込まれる
+- ハイパースペースの星ストリークと発光も実際のワープ口中心から発生
+- ワープ中はミニマップや方向表示を隠し、演出へ視線を集中

@@ -8,6 +8,7 @@ const game = new JetDriftGame(canvas);
 const titleScreen = $('titleScreen');
 const hud = $('hud');
 const pauseScreen = $('pauseScreen');
+const controls = $('controls');
 const stageNumber = $('stageNumber');
 const stageName = $('stageName');
 const stageHint = $('stageHint');
@@ -100,6 +101,7 @@ function setState(state, detail = {}) {
   if (state === 'start') {
     titleScreen.hidden = true;
     pauseScreen.hidden = true;
+    controls.hidden = false;
     hud.hidden = false;
     syncHud(detail?.stageIndex == null ? game.getSnapshot() : detail);
     return;
@@ -109,17 +111,20 @@ function setState(state, detail = {}) {
     return;
   }
   if (state === 'pause') {
+    controls.hidden = true;
     pauseScreen.hidden = false;
     return;
   }
   if (state === 'resume') {
     pauseScreen.hidden = true;
+    controls.hidden = false;
     hud.hidden = false;
     syncHud();
     return;
   }
   if (state === 'title') {
     hud.hidden = true;
+    controls.hidden = true;
     pauseScreen.hidden = true;
     titleScreen.hidden = false;
     resetControls();

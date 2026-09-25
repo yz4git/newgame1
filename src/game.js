@@ -195,7 +195,7 @@ function chipNoise(events, start, duration, volume, noiseKind, noiseRate = 1) {
 
 function generateJetDriftBgm() {
   const intensity = 0.68;
-  const seed = 0x4a455444;
+  const seed = 0x53504143;
   const bpm = 164;
   const bars = 4;
   const rootMidi = 57;
@@ -1199,11 +1199,56 @@ export class JetDriftGame {
 
     ctx.save();
     ctx.rotate(nozzleAngle);
-    ctx.fillStyle = '#182531';
-    ctx.strokeStyle = '#96cde8';
-    ctx.lineWidth = 2;
-    ctx.fillRect(8, -7, 8, 14);
-    ctx.strokeRect(8, -7, 8, 14);
+
+    const readyPulse = 0.55 + Math.sin(this.globalTime * 8.5) * 0.18;
+    ctx.shadowColor = '#75dfff';
+    ctx.shadowBlur = this.thrusting ? 14 : 8;
+
+    ctx.fillStyle = '#132330';
+    ctx.strokeStyle = '#9eddf5';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(7, -5);
+    ctx.lineTo(14, -8);
+    ctx.lineTo(19, -5);
+    ctx.lineTo(19, 5);
+    ctx.lineTo(14, 8);
+    ctx.lineTo(7, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.strokeStyle = this.thrusting
+      ? 'rgba(225,251,255,.95)'
+      : `rgba(115,220,255,${readyPulse})`;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(18, -4);
+    ctx.lineTo(22, 0);
+    ctx.lineTo(18, 4);
+    ctx.stroke();
+
+    if (!this.thrusting && this.fuel > 0) {
+      const flicker = 8 + Math.sin(this.globalTime * 13) * 2;
+      const preview = ctx.createLinearGradient(20, 0, 20 + flicker + 11, 0);
+      preview.addColorStop(0, `rgba(206,249,255,${0.36 + readyPulse * 0.18})`);
+      preview.addColorStop(0.28, `rgba(82,210,255,${0.28 + readyPulse * 0.14})`);
+      preview.addColorStop(1, 'rgba(82,210,255,0)');
+      ctx.fillStyle = preview;
+      ctx.beginPath();
+      ctx.moveTo(20, -3.6);
+      ctx.lineTo(20 + flicker + 11, 0);
+      ctx.lineTo(20, 3.6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = `rgba(255,218,128,${0.40 + readyPulse * 0.22})`;
+      ctx.beginPath();
+      ctx.arc(21.5, 0, 1.6, 0, TAU);
+      ctx.fill();
+    }
+
+    ctx.shadowBlur = 0;
     ctx.restore();
 
     const speed = Math.hypot(p.vx, p.vy);
@@ -1374,8 +1419,9 @@ export class JetDriftGame {
     if (this.clearTimer <= 0) return;
     const duration = 1.0;
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
-    const cx = this.width * 0.5;
-    const cy = this.height * 0.5;
+    const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+    const cx = portal.x;
+    const cy = portal.y;
     const diag = Math.hypot(this.width, this.height);
 
     ctx.save();
@@ -1545,12 +1591,19 @@ export class JetDriftGame {
     if (this.failTimer <= 0) {
       if (this.clearTimer > 0) {
         const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+        const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
+        const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+        const startX = this.width * 0.5;
+        const startY = this.height * 0.5;
+        const shipX = lerp(startX, portal.x, suction);
+        const shipY = lerp(startY, portal.y, suction);
+        const shrink = 1 - clamp((t - 0.12) / 0.76, 0, 1) * 0.86;
         ctx.save();
-        ctx.globalAlpha = clamp(1 - t * 1.25, 0, 1);
-        const s = 1 - t * 0.72;
-        ctx.translate(this.width * 0.5, this.height * 0.5);
-        ctx.scale(s, s);
-        ctx.translate(-this.width * 0.5, -this.height * 0.5);
+        ctx.globalAlpha = clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
+        ctx.translate(shipX, shipY);
+        ctx.rotate(t * 0.22);
+        ctx.scale(shrink, shrink);
+        ctx.translate(-startX, -startY);
         this.drawPlayer(ctx);
         ctx.restore();
       } else {
@@ -1558,9 +1611,11 @@ export class JetDriftGame {
       }
     }
 
-    this.drawDirectionCue(ctx);
-    this.drawMinimap(ctx);
-    this.drawCrisisOverlay(ctx);
+    if (this.clearTimer <= 0) {
+      this.drawDirectionCue(ctx);
+      this.drawMinimap(ctx);
+      this.drawCrisisOverlay(ctx);
+    }
     this.drawExplosionEffect(ctx);
     this.drawWarpEffect(ctx);
   }

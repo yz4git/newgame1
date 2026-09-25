@@ -9,7 +9,7 @@ The game uses the same `sound-wave-eight-bit-v1` event model and the same pulse 
 - kind: `bgm`
 - purpose: `battle`
 - intensity: `0.68`
-- seed: `0x4A455444` ("JETD")
+- seed: `0x53504143` ("SPAC")
 - bpm: `164`
 - bars: `4`
 - loop duration: about `5.85s`
