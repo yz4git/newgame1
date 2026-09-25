@@ -117,6 +117,83 @@ function createStage(index) {
     });
   }
 
+  const winds = [];
+  const windCount = n < 7 ? 0 : (n >= 25 ? 2 : 1);
+  for (let i = 0; i < windCount; i += 1) {
+    const t = 0.26 + (i + 1) / (windCount + 1) * 0.30;
+    const sideSign = (i + n) % 2 === 0 ? 1 : -1;
+    const side = sideSign * (24 + rnd() * 54);
+    const flow = normalize(
+      dir.x * (0.78 + rnd() * 0.35) + perp.x * sideSign * (0.20 + rnd() * 0.35),
+      dir.y * (0.78 + rnd() * 0.35) + perp.y * sideSign * (0.20 + rnd() * 0.35),
+    );
+    winds.push({
+      x: portal.x * t + perp.x * side,
+      y: portal.y * t + perp.y * side,
+      range: 82 + rnd() * 28,
+      dx: flow.x,
+      dy: flow.y,
+      strength: 72 + Math.min(52, n * 1.7),
+    });
+  }
+
+  const repulsors = [];
+  if (n >= 10) {
+    const t = 0.47 + rnd() * 0.12;
+    const sideSign = n % 2 === 0 ? 1 : -1;
+    repulsors.push({
+      x: portal.x * t + perp.x * sideSign * (82 + rnd() * 35),
+      y: portal.y * t + perp.y * sideSign * (82 + rnd() * 35),
+      range: 142 + rnd() * 28,
+      period: 1.65 + rnd() * 0.35,
+      phase: rnd(),
+      strength: 255 + Math.min(90, n * 3.0),
+    });
+  }
+
+  const phaseGates = [];
+  if (n >= 14) {
+    const t = 0.58 + rnd() * 0.08;
+    phaseGates.push({
+      x: portal.x * t,
+      y: portal.y * t,
+      angle: Math.atan2(dir.y, dir.x) + Math.PI * 0.5,
+      halfLen: 78 + rnd() * 24,
+      width: 7,
+      period: 1.55 + rnd() * 0.35,
+      phase: rnd(),
+      activeRatio: 0.56,
+    });
+  }
+
+  const boostRings = [];
+  if (n >= 17) {
+    const t = 0.30 + rnd() * 0.18;
+    const sideSign = n % 2 === 0 ? -1 : 1;
+    boostRings.push({
+      x: portal.x * t + perp.x * sideSign * (22 + rnd() * 34),
+      y: portal.y * t + perp.y * sideSign * (22 + rnd() * 34),
+      r: 28 + rnd() * 5,
+      dx: dir.x,
+      dy: dir.y,
+      boost: 92 + Math.min(48, n * 1.5),
+      used: false,
+    });
+  }
+
+  const dragClouds = [];
+  if (n >= 21) {
+    const t = 0.69 + rnd() * 0.08;
+    const sideSign = n % 2 === 0 ? 1 : -1;
+    dragClouds.push({
+      x: portal.x * t + perp.x * sideSign * (42 + rnd() * 42),
+      y: portal.y * t + perp.y * sideSign * (42 + rnd() * 42),
+      range: 76 + rnd() * 24,
+      drag: 1.35 + Math.min(0.85, n * 0.018),
+      phase: rnd() * TAU,
+    });
+  }
+
   const margin = 420;
   const minX = Math.min(0, portal.x) - margin;
   const maxX = Math.max(0, portal.x) + margin;
@@ -130,6 +207,24 @@ function createStage(index) {
   if (n >= 13) title = 'LASER ORBIT';
   if (n >= 19) title = 'DEEP DRIFT';
   if (n >= 25) title = 'ENDLESS ' + String(n).padStart(3, '0');
+  if (n === 7) title = 'SOLAR WIND';
+  if (n === 10) title = 'PULSE BEACON';
+  if (n === 14) title = 'PHASE GATE';
+  if (n === 17) title = 'BOOST RING';
+  if (n === 21) title = 'DRAG CLOUD';
+
+  let hint = n <= 2
+    ? 'スティック方向にノズル。JETで反対方向へ加速'
+    : n < 6
+      ? '短く噴射して慣性を作り、ワープ口へ'
+      : n < 13
+        ? '動く障害物と重力を読み、燃料を節約'
+        : '障害物の周期を見て一気に抜ける';
+  if (n === 7) hint = '青いSOLAR WINDを利用すると少ない噴射で加速できる';
+  if (n === 10) hint = 'PULSE BEACONの衝撃波周期を見てラインを選ぶ';
+  if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
+  if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
+  if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く抜けるか迂回';
 
   return {
     n,
@@ -144,14 +239,13 @@ function createStage(index) {
     wells,
     lasers,
     fuels,
+    winds,
+    repulsors,
+    phaseGates,
+    boostRings,
+    dragClouds,
     startAim: { x: -dir.x, y: -dir.y },
-    hint: n <= 2
-      ? 'スティック方向にノズル。JETで反対方向へ加速'
-      : n < 6
-        ? '短く噴射して慣性を作り、ワープ口へ'
-        : n < 13
-          ? '動く障害物と重力を読み、燃料を節約'
-          : '障害物の周期を見て一気に抜ける',
+    hint,
   };
 }
 
@@ -634,6 +728,13 @@ export class JetDriftGame {
     this.onToast = () => {};
     this.onFx = () => {};
     this.records = this.loadRecords();
+    this.ghostStore = this.loadGhostStore();
+    this.ghostTrail = [];
+    this.currentTrail = [];
+    this.stageElapsed = 0;
+    this.trailSampleTimer = 0;
+    this.pathLength = 0;
+    this.lastLineRating = null;
     this.frame = this.frame.bind(this);
     this.resize();
     window.addEventListener('resize', () => this.resize(), { passive: true });
@@ -667,6 +768,71 @@ export class JetDriftGame {
 
   getRecords() {
     return { ...this.records };
+  }
+
+  loadGhostStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('jetDriftGhostsV1') || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  getGhostTrail(index) {
+    const packed = this.ghostStore[String(index)];
+    if (!Array.isArray(packed)) return [];
+    return packed
+      .filter((p) => Array.isArray(p) && p.length >= 3 && p.every(Number.isFinite))
+      .slice(0, 180)
+      .map((p) => ({ x: p[0], y: p[1], t: p[2] / 100 }));
+  }
+
+  recordTrailPoint(force = false) {
+    if (!this.currentTrail) return;
+    const p = this.player;
+    const last = this.currentTrail[this.currentTrail.length - 1];
+    const moved = !last || Math.hypot(p.x - last.x, p.y - last.y) >= 7;
+    if (!force && !moved) return;
+    if (last && Math.abs(last.t - this.stageElapsed) < 0.025) {
+      if (force) {
+        last.x = p.x;
+        last.y = p.y;
+        last.t = this.stageElapsed;
+      }
+      return;
+    }
+    this.currentTrail.push({ x: p.x, y: p.y, t: this.stageElapsed });
+    if (this.currentTrail.length > 180) this.currentTrail.splice(1, 1);
+  }
+
+  saveCurrentGhost() {
+    if (!this.currentTrail || this.currentTrail.length < 2) return;
+    this.recordTrailPoint(true);
+    const key = String(this.stageIndex);
+    this.ghostStore[key] = this.currentTrail.map((p) => [
+      Math.round(p.x),
+      Math.round(p.y),
+      Math.round(p.t * 100),
+    ]);
+    const endlessKeys = Object.keys(this.ghostStore)
+      .filter((k) => Number(k) >= 24)
+      .sort((a, b) => Number(a) - Number(b));
+    while (Object.keys(this.ghostStore).length > 64 && endlessKeys.length) {
+      delete this.ghostStore[endlessKeys.shift()];
+    }
+    try { localStorage.setItem('jetDriftGhostsV1', JSON.stringify(this.ghostStore)); } catch {}
+  }
+
+  evaluateLine() {
+    const straight = Math.max(1, Math.hypot(this.stage.portal.x, this.stage.portal.y));
+    const ratio = Math.max(1, this.pathLength / straight);
+    const direct = clamp(1 - (ratio - 1) / 0.90, 0, 1);
+    const time = clamp(this.timeLeft / Math.max(0.1, this.stage.time), 0, 1);
+    const fuel = clamp(this.fuel / Math.max(1, this.stage.fuelStart), 0, 1);
+    const score = Math.round((direct * 0.64 + time * 0.21 + fuel * 0.15) * 100);
+    const grade = score >= 92 ? 'S' : score >= 82 ? 'A' : score >= 70 ? 'B' : score >= 58 ? 'C' : 'D';
+    return { score, grade, ratio, time, fuel };
   }
 
   resize() {
@@ -727,6 +893,12 @@ export class JetDriftGame {
     this.aimY = -Math.sin(this.player.angle);
     this.fuel = this.stage.fuelStart;
     this.timeLeft = this.stage.time;
+    this.ghostTrail = this.getGhostTrail(index);
+    this.currentTrail = [{ x: 0, y: 0, t: 0 }];
+    this.stageElapsed = 0;
+    this.trailSampleTimer = 0;
+    this.pathLength = 0;
+    this.lastLineRating = null;
     this.failTimer = 0;
     this.clearTimer = 0;
     this.warpOutTimer = warpOut ? 0.72 : 0;
@@ -793,6 +965,7 @@ export class JetDriftGame {
 
   triggerFail(reason) {
     if (this.state !== 'playing' || this.failTimer > 0 || this.clearTimer > 0) return;
+    this.saveCurrentGhost();
     this.failTimer = 0.50;
     this.thrusting = false;
     this.audio.fail();
@@ -807,7 +980,12 @@ export class JetDriftGame {
 
   clearStage() {
     if (this.clearTimer > 0 || this.failTimer > 0) return;
-    const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6);
+    this.recordTrailPoint(true);
+    const rating = this.evaluateLine();
+    this.lastLineRating = rating;
+    this.saveCurrentGhost();
+    const lineBonus = rating.score * 3;
+    const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus);
     this.score += bonus;
     this.clearTimer = 1.00;
     this.thrusting = false;
@@ -816,7 +994,10 @@ export class JetDriftGame {
     this.records.furthest = Math.max(this.records.furthest, this.stageIndex + 2);
     this.records.bestScore = Math.max(this.records.bestScore, this.score);
     this.saveRecords();
-    this.onToast('WARP DRIVE', '+' + bonus + ' · FUEL ' + Math.round(this.fuel) + '%');
+    this.onToast(
+      'LINE ' + rating.grade + ' · WARP DRIVE',
+      'PATH ' + rating.ratio.toFixed(2) + 'x · FUEL ' + Math.round(this.fuel) + '% · +' + bonus,
+    );
     this.onChange('hud', this.getSnapshot());
   }
 
@@ -838,6 +1019,24 @@ export class JetDriftGame {
       bx: laser.x + dx,
       by: laser.y + dy,
     };
+  }
+
+  repulsorPulse(repulsor) {
+    const phase = ((this.stageElapsed / repulsor.period) + repulsor.phase) % 1;
+    if (phase > 0.20) return 0;
+    const t = phase / 0.20;
+    return Math.pow(1 - t, 1.7);
+  }
+
+  phaseGateActive(gate) {
+    const phase = ((this.stageElapsed / gate.period) + gate.phase) % 1;
+    return phase < gate.activeRatio;
+  }
+
+  phaseGateSegment(gate) {
+    const dx = Math.cos(gate.angle) * gate.halfLen;
+    const dy = Math.sin(gate.angle) * gate.halfLen;
+    return { ax: gate.x - dx, ay: gate.y - dy, bx: gate.x + dx, by: gate.y + dy };
   }
 
   update(dt) {
@@ -863,6 +1062,8 @@ export class JetDriftGame {
       return;
     }
 
+    this.stageElapsed += dt;
+    this.trailSampleTimer += dt;
     this.timeLeft -= dt;
     if (!this.timeWarned && this.timeLeft <= 4) {
       this.timeWarned = true;
@@ -896,6 +1097,36 @@ export class JetDriftGame {
       }
     }
 
+    for (const wind of this.stage.winds) {
+      const d = Math.hypot(p.x - wind.x, p.y - wind.y);
+      if (d < wind.range) {
+        const falloff = 1 - d / wind.range;
+        ax += wind.dx * wind.strength * falloff;
+        ay += wind.dy * wind.strength * falloff;
+      }
+    }
+
+    for (const repulsor of this.stage.repulsors) {
+      const dx = p.x - repulsor.x;
+      const dy = p.y - repulsor.y;
+      const d = Math.hypot(dx, dy);
+      const pulse = this.repulsorPulse(repulsor);
+      if (pulse > 0 && d < repulsor.range && d > 3) {
+        const push = repulsor.strength * pulse * (1 - d / repulsor.range);
+        ax += dx / d * push;
+        ay += dy / d * push;
+      }
+    }
+
+    for (const cloud of this.stage.dragClouds) {
+      const d = Math.hypot(p.x - cloud.x, p.y - cloud.y);
+      if (d < cloud.range) {
+        const falloff = 1 - d / cloud.range;
+        ax -= p.vx * cloud.drag * falloff;
+        ay -= p.vy * cloud.drag * falloff;
+      }
+    }
+
     if (this.thrusting && this.fuel > 0) {
       const power = 285;
       ax += -this.aimX * power;
@@ -926,8 +1157,15 @@ export class JetDriftGame {
       p.vx = p.vx / speed * 420;
       p.vy = p.vy / speed * 420;
     }
+    const prevX = p.x;
+    const prevY = p.y;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
+    this.pathLength += Math.hypot(p.x - prevX, p.y - prevY);
+    if (this.trailSampleTimer >= 0.075) {
+      this.trailSampleTimer = 0;
+      this.recordTrailPoint();
+    }
 
     if (speed > 8) p.angle = Math.atan2(p.vy, p.vx);
 
@@ -940,6 +1178,18 @@ export class JetDriftGame {
         this.syncMusicTempo();
         this.onFx('pickup');
         this.onToast('FUEL + ' + pickup.amount, Math.round(this.fuel) + '%');
+      }
+    }
+
+    for (const ring of this.stage.boostRings) {
+      if (ring.used) continue;
+      if (Math.hypot(p.x - ring.x, p.y - ring.y) <= p.r + ring.r) {
+        ring.used = true;
+        p.vx += ring.dx * ring.boost;
+        p.vy += ring.dy * ring.boost;
+        this.audio.pickup();
+        this.onFx('pickup');
+        this.onToast('BOOST RING', '+' + Math.round(ring.boost) + ' VELOCITY');
       }
     }
 
@@ -968,6 +1218,15 @@ export class JetDriftGame {
       const s = this.laserSegment(laser);
       if (pointSegmentDistance(p.x, p.y, s.ax, s.ay, s.bx, s.by) <= p.r + laser.width * 0.5) {
         this.triggerFail('LASER');
+        return;
+      }
+    }
+
+    for (const gate of this.stage.phaseGates) {
+      if (!this.phaseGateActive(gate)) continue;
+      const s = this.phaseGateSegment(gate);
+      if (pointSegmentDistance(p.x, p.y, s.ax, s.ay, s.bx, s.by) <= p.r + gate.width * 0.5) {
+        this.triggerFail('PHASE GATE');
         return;
       }
     }
@@ -1188,6 +1447,195 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawGhostTrail(ctx) {
+    if (!this.ghostTrail || this.ghostTrail.length < 2 || this.clearTimer > 0) return;
+    ctx.save();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(126,232,255,.28)';
+    ctx.setLineDash([6, 7]);
+    ctx.beginPath();
+    for (let i = 0; i < this.ghostTrail.length; i += 1) {
+      const p = this.worldToScreen(this.ghostTrail[i].x, this.ghostTrail[i].y);
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    let ghost = this.ghostTrail[this.ghostTrail.length - 1];
+    let ghostAngle = 0;
+    for (let i = 1; i < this.ghostTrail.length; i += 1) {
+      if (this.ghostTrail[i].t >= this.stageElapsed) {
+        const a = this.ghostTrail[i - 1];
+        const b = this.ghostTrail[i];
+        const span = Math.max(0.001, b.t - a.t);
+        const mix = clamp((this.stageElapsed - a.t) / span, 0, 1);
+        ghost = { x: lerp(a.x, b.x, mix), y: lerp(a.y, b.y, mix) };
+        ghostAngle = Math.atan2(b.y - a.y, b.x - a.x);
+        break;
+      }
+    }
+    const s = this.worldToScreen(ghost.x, ghost.y);
+    if (s.x > -30 && s.x < this.width + 30 && s.y > -30 && s.y < this.height + 30) {
+      ctx.translate(s.x, s.y);
+      ctx.rotate(ghostAngle);
+      ctx.fillStyle = 'rgba(190,247,255,.35)';
+      ctx.shadowColor = '#82e9ff';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(8, 0);
+      ctx.lineTo(-6, -5);
+      ctx.lineTo(-3, 0);
+      ctx.lineTo(-6, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.rotate(-ghostAngle);
+      ctx.font = '700 7px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(160,230,255,.55)';
+      ctx.fillText('GHOST', 10, -8);
+    }
+    ctx.restore();
+  }
+
+  drawWind(ctx, wind) {
+    if (!this.isVisible(wind.x, wind.y, wind.range + 30)) return;
+    const p = this.worldToScreen(wind.x, wind.y);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, wind.range);
+    g.addColorStop(0, 'rgba(55,192,255,.18)');
+    g.addColorStop(1, 'rgba(55,192,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, wind.range, 0, TAU);
+    ctx.fill();
+    ctx.rotate(Math.atan2(wind.dy, wind.dx));
+    ctx.strokeStyle = 'rgba(115,224,255,.52)';
+    ctx.lineWidth = 1.4;
+    for (let y = -36; y <= 36; y += 24) {
+      const shift = ((this.globalTime * 36 + y * 3) % 42) - 21;
+      ctx.beginPath();
+      ctx.moveTo(-44 + shift, y);
+      ctx.lineTo(38 + shift, y);
+      ctx.lineTo(28 + shift, y - 5);
+      ctx.moveTo(38 + shift, y);
+      ctx.lineTo(28 + shift, y + 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawRepulsor(ctx, repulsor) {
+    if (!this.isVisible(repulsor.x, repulsor.y, repulsor.range + 20)) return;
+    const p = this.worldToScreen(repulsor.x, repulsor.y);
+    const pulse = this.repulsorPulse(repulsor);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = 'rgba(255,126,183,.14)';
+    ctx.strokeStyle = 'rgba(255,119,176,.76)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    const phase = ((this.stageElapsed / repulsor.period) + repulsor.phase) % 1;
+    const ringR = 14 + phase * (repulsor.range - 14);
+    ctx.strokeStyle = `rgba(255,126,183,${0.12 + (1 - phase) * 0.55})`;
+    ctx.lineWidth = 2 + pulse * 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringR, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawPhaseGate(ctx, gate) {
+    const s = this.phaseGateSegment(gate);
+    const a = this.worldToScreen(s.ax, s.ay);
+    const b = this.worldToScreen(s.bx, s.by);
+    const active = this.phaseGateActive(gate);
+    ctx.save();
+    ctx.strokeStyle = active ? 'rgba(255,82,118,.88)' : 'rgba(104,220,255,.24)';
+    ctx.shadowColor = active ? '#ff4269' : '#6fe8ff';
+    ctx.shadowBlur = active ? 14 : 5;
+    ctx.lineWidth = active ? gate.width : 2;
+    if (!active) ctx.setLineDash([8, 8]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  drawBoostRing(ctx, ring) {
+    if (!this.isVisible(ring.x, ring.y, 60)) return;
+    const p = this.worldToScreen(ring.x, ring.y);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(Math.atan2(ring.dy, ring.dx));
+    ctx.globalAlpha = ring.used ? 0.22 : 1;
+    ctx.strokeStyle = '#76ffad';
+    ctx.shadowColor = '#65ffac';
+    ctx.shadowBlur = ring.used ? 3 : 12;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, ring.r, 0, TAU);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-10, -7);
+    ctx.lineTo(11, 0);
+    ctx.lineTo(-10, 7);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  drawDragCloud(ctx, cloud) {
+    if (!this.isVisible(cloud.x, cloud.y, cloud.range + 30)) return;
+    const p = this.worldToScreen(cloud.x, cloud.y);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    const g = ctx.createRadialGradient(0, 0, 5, 0, 0, cloud.range);
+    g.addColorStop(0, 'rgba(126,119,170,.24)');
+    g.addColorStop(0.65, 'rgba(73,72,112,.17)');
+    g.addColorStop(1, 'rgba(45,45,80,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, cloud.range, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(159,151,207,.25)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i += 1) {
+      const a = this.globalTime * (0.12 + i * 0.04) + cloud.phase + i * 2.1;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * 14, Math.sin(a) * 10, cloud.range * (0.34 + i * 0.13), 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawLineRating(ctx) {
+    if (!this.lastLineRating || this.clearTimer <= 0) return;
+    const r = this.lastLineRating;
+    const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+    const alpha = clamp(Math.min(t * 5, (1 - t) * 6 + 0.25), 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#69e2ff';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#e9fbff';
+    ctx.font = '900 30px ui-monospace, monospace';
+    ctx.fillText('LINE ' + r.grade, this.width * 0.5, this.height * 0.72);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(174,225,241,.85)';
+    ctx.font = '800 10px ui-monospace, monospace';
+    ctx.fillText('PATH ' + r.ratio.toFixed(2) + 'x · SCORE ' + r.score, this.width * 0.5, this.height * 0.72 + 18);
+    ctx.restore();
+  }
+
   drawPlayer(ctx) {
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
@@ -1377,6 +1825,19 @@ export class JetDriftGame {
       ctx.fillStyle = '#76ffad';
       ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
     }
+    for (const gate of this.stage.phaseGates) {
+      const p = toMini(gate.x, gate.y);
+      ctx.fillStyle = this.phaseGateActive(gate) ? '#ff657d' : '#67dfff';
+      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+    for (const ring of this.stage.boostRings) {
+      if (ring.used) continue;
+      const p = toMini(ring.x, ring.y);
+      ctx.strokeStyle = '#76ffad';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.8, 0, TAU);
+      ctx.stroke();
+    }
 
     const portal = toMini(this.stage.portal.x, this.stage.portal.y);
     ctx.strokeStyle = '#77e9ff';
@@ -1403,7 +1864,13 @@ export class JetDriftGame {
   }
 
   drawWorld(ctx) {
+    for (const cloud of this.stage.dragClouds) this.drawDragCloud(ctx, cloud);
+    for (const wind of this.stage.winds) this.drawWind(ctx, wind);
+    this.drawGhostTrail(ctx);
     for (const well of this.stage.wells) this.drawWell(ctx, well);
+    for (const repulsor of this.stage.repulsors) this.drawRepulsor(ctx, repulsor);
+    for (const gate of this.stage.phaseGates) this.drawPhaseGate(ctx, gate);
+    for (const ring of this.stage.boostRings) this.drawBoostRing(ctx, ring);
     this.drawPortal(ctx);
     for (const fuel of this.stage.fuels) this.drawFuel(ctx, fuel);
     for (const a of this.stage.asteroids) this.drawAsteroid(ctx, a);
@@ -1720,6 +2187,7 @@ export class JetDriftGame {
     this.drawWarpOutEffect(ctx);
     this.drawExplosionEffect(ctx);
     this.drawWarpEffect(ctx);
+    this.drawLineRating(ctx);
   }
 
   frame(now) {
