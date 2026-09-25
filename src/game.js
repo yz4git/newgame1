@@ -193,7 +193,7 @@ function chipNoise(events, start, duration, volume, noiseKind, noiseRate = 1) {
   events.push({ channel: 'noise', start, duration, volume, noiseKind, noiseRate });
 }
 
-function generateJetDriftBgm(bpm = 120) {
+function generateJetDriftBgm(bpm = 110) {
   const intensity = 0.68;
   const seed = 0x53504143;
   const bars = 4;
@@ -300,7 +300,7 @@ function generateJetDriftSfx(purpose, intensity, seed) {
 }
 
 const JET_DRIFT_8BIT = {
-  bgmSlow: generateJetDriftBgm(120),
+  bgmSlow: generateJetDriftBgm(110),
   bgmFast: generateJetDriftBgm(164),
   warp: generateJetDriftSfx('magic', 0.88, 0x57415250),
   clear: generateJetDriftSfx('critical', 0.72, 0x434c4541),
@@ -722,7 +722,7 @@ export class JetDriftGame {
     this.player.y = 0;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.angle = 0;
+    this.player.angle = Math.atan2(this.stage.portal.y, this.stage.portal.x);
     this.aimX = this.stage.startAim.x;
     this.aimY = this.stage.startAim.y;
     this.fuel = this.stage.fuelStart;

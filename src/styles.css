@@ -50,7 +50,7 @@ button{font:inherit}
 
 .controls{position:absolute;inset:0;z-index:4;pointer-events:none}
 .stick{
-  position:absolute;left:calc(22px + var(--safe-left));bottom:calc(79px + var(--safe-bottom));
+  position:absolute;left:calc(22px + var(--safe-left));bottom:calc(109px + var(--safe-bottom));
   width:118px;height:118px;border-radius:50%;pointer-events:auto;touch-action:none;
   border:1px solid rgba(122,211,247,.28);background:radial-gradient(circle,rgba(27,74,98,.22),rgba(4,14,23,.68));
   box-shadow:inset 0 0 30px rgba(50,154,203,.09),0 14px 38px rgba(0,0,0,.32)
@@ -68,7 +68,7 @@ button{font:inherit}
   font:800 7px ui-monospace,monospace;letter-spacing:.12em;white-space:nowrap
 }
 .jet-button{
-  position:absolute;right:calc(28px + var(--safe-right));bottom:calc(84px + var(--safe-bottom));
+  position:absolute;right:calc(28px + var(--safe-right));bottom:calc(114px + var(--safe-bottom));
   width:100px;height:100px;border-radius:50%;pointer-events:auto;touch-action:none;
   border:2px solid rgba(126,230,255,.65);color:#dffaff;background:radial-gradient(circle at 40% 35%,#1b5570,#082030 70%);
   box-shadow:0 0 0 7px rgba(63,166,208,.08),0 16px 38px rgba(0,0,0,.38),inset 0 0 28px rgba(84,215,255,.12);
@@ -141,9 +141,9 @@ button{font:inherit}
   .stat-card{min-width:60px;padding:6px}.stat-card strong{font-size:14px}.eyebrow{font-size:6px}
   .score-card{display:none}
   .fuel-panel{left:calc(8px + var(--safe-left));top:calc(59px + var(--safe-top));width:min(210px,46vw)}
-  .stick{width:104px;height:104px;left:calc(14px + var(--safe-left));bottom:calc(67px + var(--safe-bottom))}
+  .stick{width:104px;height:104px;left:calc(14px + var(--safe-left));bottom:calc(93px + var(--safe-bottom))}
   .stick-knob{width:44px;height:44px;margin:-22px}
-  .jet-button{width:88px;height:88px;right:calc(20px + var(--safe-right));bottom:calc(72px + var(--safe-bottom));font-size:17px}
+  .jet-button{width:88px;height:88px;right:calc(20px + var(--safe-right));bottom:calc(98px + var(--safe-bottom));font-size:17px}
   .utility{right:calc(15px + var(--safe-right));bottom:calc(222px + var(--safe-bottom))}
   .toast{top:calc(9px + var(--safe-top));max-width:48vw}
   .title-content{padding-left:0}.title-content h1{font-size:clamp(52px,15vw,94px)}.title-topline,.title-bottomline{font-size:6px}
@@ -157,8 +157,8 @@ button{font:inherit}
 }
 @media(orientation:portrait){
   .title-content h1{font-size:clamp(58px,18vw,102px)}
-  .stick{bottom:calc(80px + var(--safe-bottom))}
-  .jet-button{bottom:calc(86px + var(--safe-bottom))}
+  .stick{bottom:calc(106px + var(--safe-bottom))}
+  .jet-button{bottom:calc(112px + var(--safe-bottom))}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important}}
 .time-card{

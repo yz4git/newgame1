@@ -10,10 +10,10 @@ The game uses the same `sound-wave-eight-bit-v1` event model and the same pulse 
 - purpose: `battle`
 - intensity: `0.68`
 - seed: `0x53504143` ("SPAC")
-- normal bpm: `120`
+- normal bpm: `110`
 - crisis bpm: `164` (TIME <= 2.5s or FUEL <= 12%)
 - bars: `4`
-- normal loop duration: about `8.00s`
+- normal loop duration: about `8.73s`
 - crisis loop duration: about `5.85s`
 
 The short loop is intentional: JET DRIFT stages are only several seconds long, so the BGM keeps momentum across stage transitions rather than restarting every stage.
@@ -45,6 +45,6 @@ No external WAV request is needed, so the audio remains lightweight and offline/
 
 Both normal and crisis versions use the same seed `0x53504143` and the same generated note/event pattern. Only event timing changes with BPM.
 
-- Normal: 120 BPM
+- Normal: 110 BPM
 - Red TIME/FUEL crisis: 164 BPM
-- Fuel recovery can return to 120 BPM if TIME is not yet critical
+- Fuel recovery can return to 110 BPM if TIME is not yet critical

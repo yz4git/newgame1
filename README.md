@@ -146,3 +146,11 @@ https://yz4git.github.io/newgame1/latest.html
 - タイトルのSTARTボタンは見た目と実タップ矩形を同じ固定サイズへ統一
 - iPhone Safariでズレ要因になり得る押下時transformを廃止
 - タイトル本文のpointer hitを無効化し、STARTと更新リンクだけを操作対象に限定
+
+## v1.5.3 — 110 BPM / Quarter-Lift / Start Heading
+
+- 通常BGMを120 BPMから110 BPMへ減速
+- 赤警告時の164 BPMは変更なし
+- STICKとJETをv1.5.2位置から約0.25スティック分上へ移動
+- ステージ開始時、自機の機首をワープ口を示す矢印方向へ向けて初期化
+- ノズル初期方向は従来どおり機首の反対側なので、開始直後のJETでワープ口方向へ加速できる
