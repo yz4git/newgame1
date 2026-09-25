@@ -404,7 +404,7 @@ export class JetDriftGame {
 
   triggerFail(reason) {
     if (this.state !== 'playing' || this.failTimer > 0 || this.clearTimer > 0) return;
-    this.failTimer = 0.52;
+    this.failTimer = 0.50;
     this.thrusting = false;
     this.audio.fail();
     this.onFx('fail');
@@ -420,14 +420,14 @@ export class JetDriftGame {
     if (this.clearTimer > 0 || this.failTimer > 0) return;
     const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6);
     this.score += bonus;
-    this.clearTimer = 0.36;
+    this.clearTimer = 1.00;
     this.thrusting = false;
     this.audio.warp();
     this.onFx('clear');
     this.records.furthest = Math.max(this.records.furthest, this.stageIndex + 2);
     this.records.bestScore = Math.max(this.records.bestScore, this.score);
     this.saveRecords();
-    this.onToast('WARP IN · CLEAR', '+' + bonus + ' · FUEL ' + Math.round(this.fuel) + '%');
+    this.onToast('WARP DRIVE', '+' + bonus + ' · FUEL ' + Math.round(this.fuel) + '%');
     this.onChange('hud', this.getSnapshot());
   }
 
@@ -989,6 +989,102 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawWarpEffect(ctx) {
+    if (this.clearTimer <= 0) return;
+    const duration = 1.0;
+    const t = clamp(1 - this.clearTimer / duration, 0, 1);
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.5;
+    const maxR = Math.hypot(this.width, this.height) * 0.62;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const tunnel = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+    tunnel.addColorStop(0, `rgba(220,252,255,${0.38 + t * 0.36})`);
+    tunnel.addColorStop(0.10 + t * 0.12, `rgba(79,215,255,${0.32 + t * 0.20})`);
+    tunnel.addColorStop(0.48, 'rgba(31,116,202,.08)');
+    tunnel.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = tunnel;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    for (let i = 0; i < 5; i += 1) {
+      const phase = (t * 1.7 + i / 5) % 1;
+      const r = 16 + phase * maxR;
+      ctx.strokeStyle = `rgba(128,235,255,${(1 - phase) * 0.72})`;
+      ctx.lineWidth = 2 + (1 - phase) * 3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, TAU);
+      ctx.stroke();
+    }
+
+    const streakCount = 26;
+    for (let i = 0; i < streakCount; i += 1) {
+      const a = i / streakCount * TAU + i * 0.37;
+      const inner = 28 + (i % 4) * 8;
+      const len = 70 + t * 190 + (i % 5) * 13;
+      const alpha = 0.20 + 0.42 * t;
+      ctx.strokeStyle = `rgba(178,243,255,${alpha})`;
+      ctx.lineWidth = 1 + (i % 3) * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      ctx.lineTo(cx + Math.cos(a) * (inner + len), cy + Math.sin(a) * (inner + len));
+      ctx.stroke();
+    }
+
+    const white = clamp((t - 0.72) / 0.28, 0, 1);
+    if (white > 0) {
+      ctx.fillStyle = `rgba(225,252,255,${white * 0.82})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+    ctx.restore();
+  }
+
+  drawExplosionEffect(ctx) {
+    if (this.failTimer <= 0) return;
+    const duration = 0.50;
+    const t = clamp(1 - this.failTimer / duration, 0, 1);
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.5;
+    const ease = 1 - Math.pow(1 - t, 3);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    const flashAlpha = Math.max(0, 1 - t * 2.2);
+    ctx.fillStyle = `rgba(255,235,198,${flashAlpha * 0.58})`;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 105 * ease + 8);
+    g.addColorStop(0, `rgba(255,248,218,${1 - t * 0.45})`);
+    g.addColorStop(0.18, `rgba(255,174,72,${0.95 - t * 0.45})`);
+    g.addColorStop(0.52, `rgba(255,72,62,${0.72 - t * 0.55})`);
+    g.addColorStop(1, 'rgba(255,36,58,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 108 * ease + 8, 0, TAU);
+    ctx.fill();
+
+    for (let i = 0; i < 22; i += 1) {
+      const a = i / 22 * TAU + (i % 3) * 0.19;
+      const dist = ease * (48 + (i % 6) * 13);
+      const len = 12 + (i % 5) * 4;
+      ctx.strokeStyle = `rgba(255,${120 + (i % 3) * 45},72,${1 - t})`;
+      ctx.lineWidth = 1.5 + (i % 3);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * dist, cy + Math.sin(a) * dist);
+      ctx.lineTo(cx + Math.cos(a) * (dist + len), cy + Math.sin(a) * (dist + len));
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = `rgba(255,173,98,${1 - t})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22 + ease * 98, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   render() {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -1000,18 +1096,27 @@ export class JetDriftGame {
     }
 
     this.drawWorld(ctx);
-    this.drawPlayer(ctx);
+
+    if (this.failTimer <= 0) {
+      if (this.clearTimer > 0) {
+        const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = clamp(1 - t * 1.25, 0, 1);
+        const s = 1 - t * 0.72;
+        ctx.translate(this.width * 0.5, this.height * 0.5);
+        ctx.scale(s, s);
+        ctx.translate(-this.width * 0.5, -this.height * 0.5);
+        this.drawPlayer(ctx);
+        ctx.restore();
+      } else {
+        this.drawPlayer(ctx);
+      }
+    }
+
     this.drawDirectionCue(ctx);
     this.drawMinimap(ctx);
-
-    if (this.failTimer > 0) {
-      ctx.fillStyle = 'rgba(255,42,63,' + clamp(this.failTimer / 0.52, 0, 1) * 0.14 + ')';
-      ctx.fillRect(0, 0, this.width, this.height);
-    }
-    if (this.clearTimer > 0) {
-      ctx.fillStyle = 'rgba(96,225,255,' + clamp(this.clearTimer / 0.36, 0, 1) * 0.12 + ')';
-      ctx.fillRect(0, 0, this.width, this.height);
-    }
+    this.drawExplosionEffect(ctx);
+    this.drawWarpEffect(ctx);
   }
 
   frame(now) {

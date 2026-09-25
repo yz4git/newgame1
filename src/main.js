@@ -14,6 +14,7 @@ const stageHint = $('stageHint');
 const fuelFill = $('fuelFill');
 const fuelValue = $('fuelValue');
 const timeValue = $('timeValue');
+const timeCard = $('timeCard');
 const speedValue = $('speedValue');
 const scoreValue = $('scoreValue');
 const toast = $('toast');
@@ -77,7 +78,11 @@ function syncHud(snapshot = game.getSnapshot()) {
   fuelFill.style.width = clamp(snapshot.fuel, 0, 100) + '%';
   fuelFill.classList.toggle('danger', snapshot.fuel < 24);
   timeValue.textContent = Math.max(0, snapshot.timeLeft).toFixed(1);
-  timeValue.classList.toggle('danger', snapshot.timeLeft < 2.5);
+  const warning = snapshot.timeLeft <= 4 && snapshot.timeLeft > 2.5;
+  const critical = snapshot.timeLeft <= 2.5;
+  timeValue.classList.toggle('danger', critical);
+  timeCard.classList.toggle('warning', warning);
+  timeCard.classList.toggle('critical', critical);
   speedValue.textContent = String(Math.round(snapshot.speed)).padStart(3, '0');
   scoreValue.textContent = String(snapshot.score).padStart(6, '0');
 }
@@ -135,8 +140,8 @@ game.setToastCallback((title, subtitle = '') => {
 
 game.setFxCallback((type) => {
   if (!navigator.vibrate) return;
-  if (type === 'fail') navigator.vibrate(18);
-  else if (type === 'clear') navigator.vibrate([8, 18, 12]);
+  if (type === 'fail') navigator.vibrate([14, 20, 24]);
+  else if (type === 'clear') navigator.vibrate([8, 20, 10, 28, 16]);
   else if (type === 'pickup') navigator.vibrate(8);
 });
 
