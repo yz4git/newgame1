@@ -228,3 +228,29 @@ button{font:inherit}
   from{transform:scale(1);box-shadow:0 0 14px rgba(255,68,88,.18)}
   to{transform:scale(1.035);box-shadow:0 0 30px rgba(255,68,88,.48)}
 }
+
+/* v1.7 experimental wireframe warp */
+.hud{transition:opacity .18s ease,filter .18s ease}
+.hud.cinematic{opacity:.08;filter:blur(1px)}
+.experiment-panel{
+  margin:16px 0 4px;padding:10px 11px;border:1px solid rgba(105,216,255,.18);
+  background:rgba(4,16,26,.62);text-align:left
+}
+.experiment-panel .eyebrow{margin-bottom:7px;color:#79cfe9}
+.experiment-toggle{
+  width:100%;min-height:36px;padding:0 10px;border:1px solid rgba(126,230,255,.52);
+  border-radius:2px;background:linear-gradient(110deg,rgba(30,96,122,.72),rgba(8,39,57,.9));
+  color:#dffaff;font:850 10px ui-monospace,monospace;letter-spacing:.05em;
+  touch-action:manipulation
+}
+.experiment-toggle.off{
+  border-color:rgba(132,154,168,.30);background:rgba(12,20,27,.72);color:#7d929e
+}
+.experiment-panel small{
+  display:block;margin-top:6px;color:#607d8c;font-size:8px;line-height:1.45
+}
+@media(max-height:500px) and (orientation:landscape){
+  .experiment-panel{margin:8px 0 2px;padding:7px 8px}
+  .experiment-toggle{min-height:30px;font-size:8px}
+  .experiment-panel small{font-size:7px}
+}

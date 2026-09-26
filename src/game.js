@@ -735,6 +735,11 @@ export class JetDriftGame {
     this.trailSampleTimer = 0;
     this.pathLength = 0;
     this.lastLineRating = null;
+    this.wireframeWarpEnabled = true;
+    try {
+      const savedWarpMode = localStorage.getItem('jetDriftWireframeWarpV1');
+      if (savedWarpMode === '0') this.wireframeWarpEnabled = false;
+    } catch {}
     this.frame = this.frame.bind(this);
     this.resize();
     window.addEventListener('resize', () => this.resize(), { passive: true });
@@ -749,6 +754,16 @@ export class JetDriftGame {
     if (v && this.state === 'playing') void this.audio.startMusic(this.isMusicUrgent() ? 'fast' : 'slow');
   }
   unlockAudio() { this.audio.unlock(); }
+
+  getWireframeWarpEnabled() {
+    return this.wireframeWarpEnabled;
+  }
+
+  setWireframeWarpEnabled(value) {
+    this.wireframeWarpEnabled = Boolean(value);
+    try { localStorage.setItem('jetDriftWireframeWarpV1', this.wireframeWarpEnabled ? '1' : '0'); } catch {}
+    this.onChange('settings', this.getSnapshot());
+  }
 
   loadRecords() {
     try {
@@ -901,7 +916,7 @@ export class JetDriftGame {
     this.lastLineRating = null;
     this.failTimer = 0;
     this.clearTimer = 0;
-    this.warpOutTimer = warpOut ? 0.72 : 0;
+    this.warpOutTimer = warpOut ? (this.wireframeWarpEnabled ? 1.02 : 0.72) : 0;
     this.strandedTimer = 0;
     this.timeWarned = false;
     this.timeCriticalWarned = false;
@@ -912,7 +927,10 @@ export class JetDriftGame {
     this.audio.stopJet();
     this.audio.stopSfx();
     void this.audio.startMusic('slow');
-    if (warpOut) this.audio.warpOut();
+    if (warpOut) {
+      this.audio.warpOut();
+      if (this.wireframeWarpEnabled) this.onFx('warp3dOut');
+    }
     if (!silent) {
       this.onToast('STAGE ' + String(index + 1).padStart(index >= 24 ? 3 : 2, '0') + ' · ' + this.stage.title, this.stage.hint);
     }
@@ -960,6 +978,7 @@ export class JetDriftGame {
       speed: Math.hypot(this.player.vx, this.player.vy),
       attempts: this.attempts,
       endless: this.stageIndex >= 24,
+      wireframeWarp: this.wireframeWarpEnabled,
     };
   }
 
@@ -987,10 +1006,11 @@ export class JetDriftGame {
     const lineBonus = rating.score * 3;
     const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus);
     this.score += bonus;
-    this.clearTimer = 1.00;
+    this.clearTimer = this.wireframeWarpEnabled ? 1.26 : 1.00;
     this.thrusting = false;
     this.audio.warp();
     this.onFx('clear');
+    if (this.wireframeWarpEnabled) this.onFx('warp3dIn');
     this.records.furthest = Math.max(this.records.furthest, this.stageIndex + 2);
     this.records.bestScore = Math.max(this.records.bestScore, this.score);
     this.saveRecords();
@@ -1052,7 +1072,10 @@ export class JetDriftGame {
 
     if (this.warpOutTimer > 0) {
       this.warpOutTimer -= dt;
-      if (this.warpOutTimer < 0) this.warpOutTimer = 0;
+      if (this.warpOutTimer <= 0) {
+        this.warpOutTimer = 0;
+        if (this.wireframeWarpEnabled) this.onFx('warp3dEnd');
+      }
       return;
     }
 
@@ -1918,8 +1941,227 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  smoothWarp(t) {
+    t = clamp(t, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  drawWireframeShip(ctx, x, y, scale, rotation, alpha = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha *= alpha;
+    ctx.strokeStyle = 'rgba(191,248,255,.95)';
+    ctx.shadowColor = '#65e4ff';
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 1.5;
+
+    ctx.beginPath();
+    ctx.moveTo(19, 0);
+    ctx.lineTo(-8, -10);
+    ctx.lineTo(-3, 0);
+    ctx.lineTo(-8, 10);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-12, -18);
+    ctx.lineTo(-5, -4);
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-12, 18);
+    ctx.lineTo(-5, 4);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-8, -10);
+    ctx.lineTo(-12, -18);
+    ctx.moveTo(-8, 10);
+    ctx.lineTo(-12, 18);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(205,251,255,.72)';
+    ctx.beginPath();
+    ctx.arc(3, 0, 2.2, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  drawWireframeWarpScene(ctx, progress, outgoing = false) {
+    const t = clamp(progress, 0, 1);
+    const ease = this.smoothWarp(t);
+    const dim = outgoing
+      ? 1 - this.smoothWarp(clamp((t - 0.28) / 0.72, 0, 1))
+      : this.smoothWarp(clamp((t - 0.04) / 0.54, 0, 1));
+    const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+    const screenX = this.width * 0.5;
+    const screenY = this.height * 0.5;
+    const vanishX = outgoing
+      ? screenX
+      : lerp(portal.x, screenX, this.smoothWarp(clamp(t / 0.48, 0, 1)));
+    const vanishY = outgoing
+      ? screenY
+      : lerp(portal.y, screenY, this.smoothWarp(clamp(t / 0.48, 0, 1)));
+    const diag = Math.hypot(this.width, this.height);
+    const minDim = Math.min(this.width, this.height);
+    const roll = (outgoing ? (1 - ease) : ease) * 0.26;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    if (dim > 0.01) {
+      ctx.fillStyle = `rgba(1,6,12,${dim * 0.62})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    // The flat 2D frame becomes a perspective floor/grid before the tunnel dominates.
+    const gridMix = outgoing
+      ? clamp((1 - t) / 0.72, 0, 1)
+      : clamp(t / 0.48, 0, 1);
+    if (gridMix > 0.01) {
+      const horizonY = lerp(this.height * 0.5, this.height * 0.36, dim);
+      ctx.strokeStyle = `rgba(95,220,255,${0.10 + gridMix * 0.27})`;
+      ctx.lineWidth = 1;
+      for (let i = -5; i <= 5; i += 1) {
+        const nearX = this.width * 0.5 + i * this.width * 0.13;
+        ctx.beginPath();
+        ctx.moveTo(vanishX, horizonY);
+        ctx.lineTo(nearX, this.height * 1.08);
+        ctx.stroke();
+      }
+      for (let i = 1; i <= 7; i += 1) {
+        const q = i / 7;
+        const y = lerp(horizonY, this.height * 1.04, q * q);
+        const half = this.width * 0.58 * q;
+        ctx.beginPath();
+        ctx.moveTo(screenX - half, y);
+        ctx.lineTo(screenX + half, y);
+        ctx.stroke();
+      }
+
+      // Border lines tie the existing 2D screen edges to the 3D vanishing point.
+      ctx.strokeStyle = `rgba(188,244,255,${gridMix * 0.18})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(vanishX, vanishY);
+      ctx.lineTo(this.width, 0);
+      ctx.moveTo(0, this.height);
+      ctx.lineTo(vanishX, vanishY);
+      ctx.lineTo(this.width, this.height);
+      ctx.stroke();
+    }
+
+    ctx.translate(vanishX, vanishY);
+    ctx.rotate(roll);
+
+    const ringCount = 13;
+    const sides = 12;
+    const centers = [];
+    const radii = [];
+    const squashes = [];
+    const travel = outgoing ? (1 - ease) * 1.65 : ease * 1.65;
+
+    for (let i = 0; i < ringCount; i += 1) {
+      let z = (i / ringCount + travel) % 1;
+      if (z < 0) z += 1;
+      const near = 1 - z;
+      const depthCurve = near * near;
+      const radius = 10 + depthCurve * diag * 0.67;
+      const squash = lerp(1, 0.50, dim);
+      const cy = (z - 0.50) * dim * minDim * 0.24;
+      centers.push(cy);
+      radii.push(radius);
+      squashes.push(squash);
+
+      const alpha = clamp(0.10 + near * 0.70, 0, 0.78) * (0.22 + dim * 0.78);
+      ctx.strokeStyle = `rgba(118,228,255,${alpha})`;
+      ctx.lineWidth = 0.7 + near * 1.4;
+      ctx.beginPath();
+      for (let j = 0; j <= sides; j += 1) {
+        const a = (j % sides) / sides * TAU + z * 1.15 + this.globalTime * 0.12;
+        const x = Math.cos(a) * radius;
+        const y = cy + Math.sin(a) * radius * squash;
+        if (j === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Longitudinal rails turn the rings into a true wireframe tunnel.
+    ctx.strokeStyle = `rgba(103,214,255,${0.14 + dim * 0.36})`;
+    ctx.lineWidth = 1;
+    for (let j = 0; j < sides; j += 2) {
+      ctx.beginPath();
+      for (let i = 0; i < ringCount; i += 1) {
+        const z = i / Math.max(1, ringCount - 1);
+        const a = j / sides * TAU + z * 1.15 + this.globalTime * 0.12;
+        const x = Math.cos(a) * radii[i];
+        const y = centers[i] + Math.sin(a) * radii[i] * squashes[i];
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Fast depth streaks amplify forward camera motion.
+    const streakAlpha = (0.10 + dim * 0.42) * (outgoing ? (1 - t * 0.35) : 1);
+    ctx.strokeStyle = `rgba(220,250,255,${streakAlpha})`;
+    for (let i = 0; i < 34; i += 1) {
+      const a = ((i * 137.508) % 360) * Math.PI / 180;
+      const seed = ((i * 47) % 101) / 101;
+      const inner = 18 + seed * minDim * 0.20;
+      const len = (34 + seed * 150) * (0.35 + dim * 0.95);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner * lerp(1, 0.62, dim));
+      ctx.lineTo(Math.cos(a) * (inner + len), Math.sin(a) * (inner + len) * lerp(1, 0.62, dim));
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Ship changes from the flat game sprite into a 3D-looking wireframe object.
+    if (!outgoing) {
+      const shipStart = this.smoothWarp(clamp((t - 0.14) / 0.76, 0, 1));
+      const sx = lerp(this.width * 0.5, vanishX, shipStart * 0.62);
+      const sy = lerp(this.height * 0.5, vanishY, shipStart * 0.62);
+      const scale = 1 - shipStart * 0.88;
+      const alpha = clamp((t - 0.12) * 5, 0, 1) * clamp((1 - t) * 5, 0, 1);
+      this.drawWireframeShip(ctx, sx, sy, scale, shipStart * TAU * 2.25, alpha);
+    } else {
+      const emerge = this.smoothWarp(clamp((t - 0.05) / 0.82, 0, 1));
+      const scale = 0.10 + emerge * 0.90;
+      const alpha = clamp(t * 4, 0, 1) * clamp((1 - t) * 5 + 0.2, 0, 1);
+      this.drawWireframeShip(
+        ctx,
+        this.width * 0.5,
+        this.height * 0.5,
+        scale,
+        (1 - emerge) * TAU * 1.8,
+        alpha,
+      );
+    }
+
+    const flash = outgoing
+      ? clamp((0.18 - t) / 0.18, 0, 1)
+      : clamp((t - 0.86) / 0.14, 0, 1);
+    if (flash > 0) {
+      ctx.save();
+      ctx.fillStyle = `rgba(232,250,255,${flash * 0.78})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+      ctx.restore();
+    }
+  }
+
   drawWarpEffect(ctx) {
     if (this.clearTimer <= 0) return;
+    if (this.wireframeWarpEnabled) {
+      const duration = 1.26;
+      const t = clamp(1 - this.clearTimer / duration, 0, 1);
+      this.drawWireframeWarpScene(ctx, t, false);
+      return;
+    }
     const duration = 1.0;
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
@@ -1983,6 +2225,12 @@ export class JetDriftGame {
 
   drawWarpOutEffect(ctx) {
     if (this.warpOutTimer <= 0) return;
+    if (this.wireframeWarpEnabled) {
+      const duration = 1.02;
+      const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
+      this.drawWireframeWarpScene(ctx, t, true);
+      return;
+    }
     const duration = 0.72;
     const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
     const cx = this.width * 0.5;
@@ -2143,37 +2391,46 @@ export class JetDriftGame {
 
     if (this.failTimer <= 0) {
       if (this.clearTimer > 0) {
-        const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
-        const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
-        const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
-        const startX = this.width * 0.5;
-        const startY = this.height * 0.5;
-        const shipX = lerp(startX, portal.x, suction);
-        const shipY = lerp(startY, portal.y, suction);
-        const shrink = 1 - clamp((t - 0.12) / 0.76, 0, 1) * 0.86;
-        ctx.save();
-        ctx.globalAlpha = clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
-        ctx.translate(shipX, shipY);
-        ctx.rotate((t * t) * TAU * 2.35);
-        ctx.scale(shrink, shrink);
-        ctx.translate(-startX, -startY);
-        this.drawPlayer(ctx);
-        ctx.restore();
+        const duration = this.wireframeWarpEnabled ? 1.26 : 1.0;
+        const t = clamp(1 - this.clearTimer / duration, 0, 1);
+        if (!this.wireframeWarpEnabled || t < 0.34) {
+          const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
+          const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+          const startX = this.width * 0.5;
+          const startY = this.height * 0.5;
+          const shipX = lerp(startX, portal.x, suction);
+          const shipY = lerp(startY, portal.y, suction);
+          const shrink = 1 - clamp((t - 0.12) / 0.76, 0, 1) * 0.86;
+          ctx.save();
+          ctx.globalAlpha = this.wireframeWarpEnabled
+            ? clamp(1 - t / 0.36, 0, 1)
+            : clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
+          ctx.translate(shipX, shipY);
+          ctx.rotate((t * t) * TAU * 2.35);
+          ctx.scale(shrink, shrink);
+          ctx.translate(-startX, -startY);
+          this.drawPlayer(ctx);
+          ctx.restore();
+        }
       } else if (this.warpOutTimer > 0) {
-        const duration = 0.72;
+        const duration = this.wireframeWarpEnabled ? 1.02 : 0.72;
         const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
-        const emerge = 1 - Math.pow(1 - t, 3);
-        const cx = this.width * 0.5;
-        const cy = this.height * 0.5;
-        const scale = 0.10 + emerge * 0.90;
-        ctx.save();
-        ctx.globalAlpha = clamp(t * 2.2, 0, 1);
-        ctx.translate(cx, cy);
-        ctx.rotate((1 - emerge) * TAU * 2.1);
-        ctx.scale(scale, scale);
-        ctx.translate(-cx, -cy);
-        this.drawPlayer(ctx);
-        ctx.restore();
+        if (!this.wireframeWarpEnabled || t > 0.68) {
+          const emerge = this.wireframeWarpEnabled
+            ? this.smoothWarp(clamp((t - 0.68) / 0.32, 0, 1))
+            : 1 - Math.pow(1 - t, 3);
+          const cx = this.width * 0.5;
+          const cy = this.height * 0.5;
+          const scale = this.wireframeWarpEnabled ? (0.82 + emerge * 0.18) : (0.10 + emerge * 0.90);
+          ctx.save();
+          ctx.globalAlpha = this.wireframeWarpEnabled ? emerge : clamp(t * 2.2, 0, 1);
+          ctx.translate(cx, cy);
+          ctx.rotate(this.wireframeWarpEnabled ? (1 - emerge) * 0.22 : (1 - emerge) * TAU * 2.1);
+          ctx.scale(scale, scale);
+          ctx.translate(-cx, -cy);
+          this.drawPlayer(ctx);
+          ctx.restore();
+        }
       } else {
         this.drawPlayer(ctx);
       }

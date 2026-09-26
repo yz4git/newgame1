@@ -26,6 +26,7 @@ const jetButton = $('jetButton');
 const soundButton = $('soundButton');
 const pauseButton = $('pauseButton');
 const bestReadout = $('bestReadout');
+const warpModeButton = $('warpModeButton');
 
 let toastTimer = 0;
 let soundEnabled = true;
@@ -97,6 +98,13 @@ function clamp(v, a, b) {
   return Math.max(a, Math.min(b, v));
 }
 
+function syncWarpModeButton() {
+  const enabled = game.getWireframeWarpEnabled();
+  warpModeButton.textContent = '3D WIREFRAME WARP · ' + (enabled ? 'ON' : 'OFF');
+  warpModeButton.classList.toggle('off', !enabled);
+  warpModeButton.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+}
+
 function setState(state, detail = {}) {
   if (state === 'start') {
     titleScreen.hidden = true;
@@ -110,6 +118,10 @@ function setState(state, detail = {}) {
     if (!hud.hidden) syncHud(detail?.stageIndex == null ? game.getSnapshot() : detail);
     return;
   }
+  if (state === 'settings') {
+    syncWarpModeButton();
+    return;
+  }
   if (state === 'pause') {
     controls.hidden = true;
     pauseScreen.hidden = false;
@@ -119,6 +131,7 @@ function setState(state, detail = {}) {
     pauseScreen.hidden = true;
     controls.hidden = false;
     hud.hidden = false;
+    hud.classList.remove('cinematic');
     syncHud();
     return;
   }
@@ -127,6 +140,7 @@ function setState(state, detail = {}) {
     controls.hidden = true;
     pauseScreen.hidden = true;
     titleScreen.hidden = false;
+    hud.classList.remove('cinematic');
     resetControls();
   }
 }
@@ -149,6 +163,14 @@ game.setToastCallback((title, subtitle = '') => {
 });
 
 game.setFxCallback((type) => {
+  if (type === 'warp3dIn' || type === 'warp3dOut') {
+    controls.hidden = true;
+    hud.classList.add('cinematic');
+  } else if (type === 'warp3dEnd') {
+    if (game.state === 'playing' && pauseScreen.hidden) controls.hidden = false;
+    hud.classList.remove('cinematic');
+  }
+
   if (!navigator.vibrate) return;
   if (type === 'fail') navigator.vibrate([14, 20, 24]);
   else if (type === 'clear') navigator.vibrate([8, 20, 10, 28, 16]);
@@ -156,6 +178,8 @@ game.setFxCallback((type) => {
   else if (type === 'warning') navigator.vibrate(7);
   else if (type === 'warningCritical') navigator.vibrate([7, 26, 10]);
 });
+
+syncWarpModeButton();
 
 const records = game.getRecords();
 bestReadout.textContent = records.furthest > 1
@@ -239,6 +263,10 @@ $('startButton').addEventListener('click', () => game.start());
 $('resumeButton').addEventListener('click', () => game.setPaused(false));
 $('restartButton').addEventListener('click', () => game.startAgain());
 $('titleButton').addEventListener('click', () => game.returnToTitle());
+warpModeButton.addEventListener('click', () => {
+  game.setWireframeWarpEnabled(!game.getWireframeWarpEnabled());
+  syncWarpModeButton();
+});
 pauseButton.addEventListener('click', () => {
   game.setPaused(true);
   resetControls();
