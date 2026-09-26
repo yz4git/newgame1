@@ -1254,6 +1254,18 @@ export class JetDriftGame {
       }
     }
 
+    const bounds = this.stage.bounds;
+    const outsideMap = (
+      p.x < bounds.minX ||
+      p.x > bounds.maxX ||
+      p.y < bounds.minY ||
+      p.y > bounds.maxY
+    );
+    if (outsideMap && this.fuel <= 0) {
+      this.triggerFail('LOST IN SPACE');
+      return;
+    }
+
     if (this.fuel <= 0 && Math.hypot(p.vx, p.vy) < 18) {
       this.strandedTimer += dt;
       if (this.strandedTimer > 0.65) {
