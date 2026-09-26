@@ -916,7 +916,7 @@ export class JetDriftGame {
     this.lastLineRating = null;
     this.failTimer = 0;
     this.clearTimer = 0;
-    this.warpOutTimer = warpOut ? (this.wireframeWarpEnabled ? 1.02 : 0.72) : 0;
+    this.warpOutTimer = warpOut ? (this.wireframeWarpEnabled ? 1.24 : 0.72) : 0;
     this.strandedTimer = 0;
     this.timeWarned = false;
     this.timeCriticalWarned = false;
@@ -1006,7 +1006,7 @@ export class JetDriftGame {
     const lineBonus = rating.score * 3;
     const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus);
     this.score += bonus;
-    this.clearTimer = this.wireframeWarpEnabled ? 1.26 : 1.00;
+    this.clearTimer = this.wireframeWarpEnabled ? 1.58 : 1.00;
     this.thrusting = false;
     this.audio.warp();
     this.onFx('clear');
@@ -1274,16 +1274,16 @@ export class JetDriftGame {
     if (!this.wireframeWarpEnabled) return null;
 
     if (this.clearTimer > 0) {
-      const duration = 1.26;
+      const duration = 1.58;
       const t = clamp(1 - this.clearTimer / duration, 0, 1);
-      const mix = this.smoothWarp(clamp((t - 0.02) / 0.72, 0, 1));
+      const mix = this.smoothWarp(clamp((t - 0.02) / 0.48, 0, 1));
       return { active: true, mix, t, phase: 'in' };
     }
 
     if (this.warpOutTimer > 0) {
-      const duration = 1.02;
+      const duration = 1.24;
       const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
-      const mix = 1 - this.smoothWarp(clamp((t - 0.06) / 0.86, 0, 1));
+      const mix = 1 - this.smoothWarp(clamp((t - 0.40) / 0.56, 0, 1));
       return { active: true, mix, t, phase: 'out' };
     }
 
@@ -1720,7 +1720,7 @@ export class JetDriftGame {
   drawLineRating(ctx) {
     if (!this.lastLineRating || this.clearTimer <= 0) return;
     const r = this.lastLineRating;
-    const duration = this.wireframeWarpEnabled ? 1.26 : 1.0;
+    const duration = this.wireframeWarpEnabled ? 1.58 : 1.0;
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const alpha = clamp(Math.min(t * 5, (1 - t) * 6 + 0.25), 0, 1);
     ctx.save();
@@ -1748,16 +1748,16 @@ export class JetDriftGame {
     const warpProjection = this.getWarpProjection();
 
     if (warpProjection?.phase === 'in') {
-      const travel = this.smoothWarp(clamp((warpProjection.t - 0.40) / 0.56, 0, 1));
+      const travel = this.smoothWarp(clamp((warpProjection.t - 0.36) / 0.44, 0, 1));
       cx = lerp(cx, this.width * 0.5, travel * 0.34);
       cy = lerp(cy, this.height * 0.34, travel);
-      shipScale *= 1 - travel * 0.86;
+      shipScale *= 1 - travel * 0.90;
       cinematicRotation = travel * TAU * 1.85;
     } else if (warpProjection?.phase === 'out') {
-      const emerge = this.smoothWarp(clamp(warpProjection.t / 0.48, 0, 1));
+      const emerge = this.smoothWarp(clamp((warpProjection.t - 0.26) / 0.42, 0, 1));
       cx = lerp(this.width * 0.5, cx, emerge);
       cy = lerp(this.height * 0.34, cy, emerge);
-      shipScale *= 0.12 + emerge * 0.88;
+      shipScale *= 0.10 + emerge * 0.90;
       cinematicRotation = (1 - emerge) * TAU * 1.45;
     }
 
@@ -2088,6 +2088,95 @@ export class JetDriftGame {
     return t * t * (3 - 2 * t);
   }
 
+  getHyperspaceAmount(progress, outgoing = false) {
+    const t = clamp(progress, 0, 1);
+    if (!outgoing) {
+      return this.smoothWarp(clamp((t - 0.44) / 0.42, 0, 1));
+    }
+    return 1 - this.smoothWarp(clamp((t - 0.18) / 0.48, 0, 1));
+  }
+
+  drawHyperspace3D(ctx, progress, outgoing = false) {
+    const amount = this.getHyperspaceAmount(progress, outgoing);
+    if (amount <= 0.001) return;
+
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.34;
+    const diag = Math.hypot(this.width, this.height);
+    const timeDrive = outgoing
+      ? (1 - progress) * 2.2
+      : progress * 2.6;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    // As the jump engages, the projected stage dims rather than being replaced.
+    const veil = clamp((amount - 0.12) / 0.88, 0, 1);
+    if (veil > 0) {
+      ctx.fillStyle = `rgba(0,4,10,${veil * 0.72})`;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    // Deterministic stars represented as 3D points flying past the camera.
+    // Their previous/current depth positions project into streaks, creating a forward-jump feel.
+    const starCount = 92;
+    for (let i = 0; i < starCount; i += 1) {
+      const seedA = ((i * 73 + 19) % 211) / 211;
+      const seedB = ((i * 131 + 47) % 223) / 223;
+      const seedC = ((i * 197 + 61) % 227) / 227;
+
+      const angle = seedA * TAU;
+      const spread = 0.12 + seedB * 1.06;
+      const radius = spread * diag * 0.52;
+      const baseX = Math.cos(angle) * radius;
+      const baseY = Math.sin(angle) * radius * 0.72;
+
+      const cycle = (seedC + timeDrive * (0.52 + seedB * 0.42)) % 1;
+      const zNow = 0.10 + cycle * 0.90;
+      const speed = 0.10 + amount * (0.40 + seedA * 0.42);
+      const zPrev = clamp(zNow + speed, 0.12, 1.34);
+
+      const perspectiveNow = 1 / Math.max(0.08, zNow);
+      const perspectivePrev = 1 / Math.max(0.08, zPrev);
+      const x2 = cx + baseX * perspectiveNow * 0.28;
+      const y2 = cy + baseY * perspectiveNow * 0.28;
+      const x1 = cx + baseX * perspectivePrev * 0.28;
+      const y1 = cy + baseY * perspectivePrev * 0.28;
+
+      const streak = amount * (0.35 + seedB * 0.80);
+      const ex = lerp(x1, x2, streak);
+      const ey = lerp(y1, y2, streak);
+      const alpha = clamp(0.18 + amount * 0.78 - seedC * 0.10, 0, 0.94);
+
+      ctx.strokeStyle = `rgba(220,246,255,${alpha})`;
+      ctx.lineWidth = 0.65 + amount * 1.65 + seedB * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+
+      if (amount < 0.30) {
+        ctx.fillStyle = `rgba(238,252,255,${0.32 + (1 - amount) * 0.45})`;
+        ctx.beginPath();
+        ctx.arc(x2, y2, 0.7 + seedA * 0.8, 0, TAU);
+        ctx.fill();
+      }
+    }
+
+    // A subtle central bloom communicates entry/exit velocity without hiding the projection.
+    const bloomR = 18 + amount * Math.min(this.width, this.height) * 0.20;
+    const bloom = ctx.createRadialGradient(cx, cy, 0, cx, cy, bloomR);
+    bloom.addColorStop(0, `rgba(224,249,255,${amount * 0.34})`);
+    bloom.addColorStop(0.18, `rgba(91,199,255,${amount * 0.18})`);
+    bloom.addColorStop(1, 'rgba(40,130,255,0)');
+    ctx.fillStyle = bloom;
+    ctx.beginPath();
+    ctx.arc(cx, cy, bloomR, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   drawProjectedWarpFlash(ctx, progress, outgoing = false) {
     const t = clamp(progress, 0, 1);
     const projection = this.getWarpProjection();
@@ -2095,17 +2184,19 @@ export class JetDriftGame {
 
     if (mix > 0.02) {
       ctx.save();
-      ctx.fillStyle = `rgba(0,5,11,${mix * 0.10})`;
+      ctx.fillStyle = `rgba(0,5,11,${mix * 0.08})`;
       ctx.fillRect(0, 0, this.width, this.height);
       ctx.restore();
     }
 
+    this.drawHyperspace3D(ctx, t, outgoing);
+
     const flash = outgoing
-      ? clamp((0.13 - t) / 0.13, 0, 1)
-      : clamp((t - 0.88) / 0.12, 0, 1);
+      ? clamp((0.10 - t) / 0.10, 0, 1)
+      : clamp((t - 0.93) / 0.07, 0, 1);
     if (flash <= 0) return;
     ctx.save();
-    ctx.fillStyle = `rgba(232,250,255,${flash * 0.76})`;
+    ctx.fillStyle = `rgba(236,252,255,${flash * 0.92})`;
     ctx.fillRect(0, 0, this.width, this.height);
     ctx.restore();
   }
@@ -2113,7 +2204,7 @@ export class JetDriftGame {
   drawWarpEffect(ctx) {
     if (this.clearTimer <= 0) return;
     if (this.wireframeWarpEnabled) {
-      const duration = 1.26;
+      const duration = 1.58;
       const t = clamp(1 - this.clearTimer / duration, 0, 1);
       this.drawProjectedWarpFlash(ctx, t, false);
       return;
@@ -2182,7 +2273,7 @@ export class JetDriftGame {
   drawWarpOutEffect(ctx) {
     if (this.warpOutTimer <= 0) return;
     if (this.wireframeWarpEnabled) {
-      const duration = 1.02;
+      const duration = 1.24;
       const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
       this.drawProjectedWarpFlash(ctx, t, true);
       return;
