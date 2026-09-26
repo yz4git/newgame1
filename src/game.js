@@ -903,7 +903,7 @@ export class JetDriftGame {
     this.player.y = 0;
     this.player.vx = 0;
     this.player.vy = 0;
-    this.player.angle = 0;
+    this.player.angle = warpOut ? -Math.PI * 0.5 : 0;
     this.aimX = -Math.cos(this.player.angle);
     this.aimY = -Math.sin(this.player.angle);
     this.fuel = this.stage.fuelStart;
