@@ -208,7 +208,7 @@ function createStage(index) {
   }
 
   if (specialType === 'VELOCITY_ENTRY') {
-    const entryDistance = 2200 + Math.min(360, Math.max(0, n - 6) * 6);
+    const entryDistance = 2350 + Math.min(360, Math.max(0, n - 6) * 6);
     startVelocity = { x: dir.x * 310, y: dir.y * 310 };
 
     // High-speed slalom: keep the opening lane clean, then force
@@ -225,8 +225,8 @@ function createStage(index) {
 
     const gateData = [
       { t: 0.44, gap: 140 },
-      { t: 0.62, gap: -140 },
-      { t: 0.80, gap: 140 },
+      { t: 0.66, gap: -140 },
+      { t: 0.87, gap: 140 },
     ];
     const wallXs = [-330, -220, -110, 0, 110, 220, 330];
 
@@ -239,7 +239,7 @@ function createStage(index) {
         asteroids.push({
           x: gateYx + perp.x * lane,
           y: gateYy + perp.y * lane,
-          r: 42,
+          r: 34,
           spin: (g % 2 === 0 ? 1 : -1) * (0.16 + Math.abs(lane) * 0.00025),
           phase: g * 0.8 + lane * 0.003,
           special: true,
@@ -250,16 +250,16 @@ function createStage(index) {
 
     // Final approach reverses the lateral direction once more:
     // + gap -> - gap -> + gap -> portal on the opposite side.
-    portal.x = dir.x * entryDistance + perp.x * -145;
-    portal.y = dir.y * entryDistance + perp.y * -145;
+    portal.x = dir.x * entryDistance + perp.x * -120;
+    portal.y = dir.y * entryDistance + perp.y * -120;
 
     // Guidance fuel near the intended lines; taking them is optional.
     fuels.length = 0;
     for (const guide of [
-      { t: 0.40, lane: 110 },
-      { t: 0.58, lane: -110 },
-      { t: 0.76, lane: 110 },
-      { t: 0.91, lane: -90 },
+      { t: 0.40, lane: 105 },
+      { t: 0.62, lane: -105 },
+      { t: 0.83, lane: 105 },
+      { t: 0.94, lane: -80 },
     ]) {
       fuels.push({
         x: dir.x * entryDistance * guide.t + perp.x * guide.lane,
@@ -271,9 +271,9 @@ function createStage(index) {
       });
     }
 
-    // Longer distance creates the reaction window without reducing the special-stage speed.
-    // STAGE 06 reaches the first mandatory steering gate after roughly 3.1 seconds.
-    time += 3.8;
+    // Longer distance and wider timing gaps keep the 3-turn identity while
+    // giving the player more room to recover at the same 310 entry speed.
+    time += 4.3;
   } else if (specialType === 'SLINGSHOT_ARC') {
     fuelStart = Math.min(fuelStart, 26);
     time += 2.0;
@@ -347,7 +347,7 @@ function createStage(index) {
   if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
   if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
   if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く横切るか迂回';
-  if (specialType === 'VELOCITY_ENTRY') hint = '高速310で自動進行。長い直進後、右→左→右→出口側へ切り返す高速スラローム';
+  if (specialType === 'VELOCITY_ENTRY') hint = '高速310で自動進行。広めのゲートを右→左→右と抜け、最後に出口側へ切り返す';
   if (specialType === 'SLINGSHOT_ARC') hint = '燃料は少ない。重力井戸へ接近し、接線速度を出口へ変える';
   if (specialType === 'MOVING_WARP') hint = 'ワープ口が横移動する。到達時刻まで読んで進路を合わせる';
   if (specialType === 'LASER_CORRIDOR') hint = 'レーザーの周期を読み、狭い回廊を一気に抜ける';

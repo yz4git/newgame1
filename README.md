@@ -419,3 +419,25 @@ STAGE 24 LASER CORRIDOR
 - ゲートは約44% / 62% / 80%地点
 - 安全ギャップは右 → 左 → 右、最終WARPは左側
 - 3回の切り返しが速度310でも成立する間隔へ調整
+
+## v1.12.0 — Easier High-Speed Slalom / Manual Visual Previews
+
+### VELOCITY ENTRY difficulty adjustment
+- 初速310と3回の切り返し構成は維持
+- コース長を約2350へ延長
+- 2つ目・3つ目のゲートを後方へ移動し、切り返し間の時間を増加
+- ゲートを構成するアステロイド半径を42から34へ縮小
+- 最終WARPの横ずれを145から120へ緩和
+- TIMEも0.5秒追加
+- 高速SPECIALらしさを残したまま、遅めの入力でもリカバリーしやすく調整
+
+### Manual visual previews
+- 各ギミックカードにゲーム画面風のCanvasプレビューを追加
+- 実際のゲーム描画と同系統の色・形・発光表現を使用
+- WARP / ASTEROID / FUEL / MINE / SOLAR WIND / GRAVITY WELL / PULSE BEACON / LASER / PHASE GATE / BOOST RING / DRAG CLOUDを視覚表示
+- SPECIALはゲーム画面の特徴を小さく再現
+  - VELOCITY ENTRY: 高速ストリーク＋3つのスラロームゲート
+  - SLINGSHOT ARC: 重力井戸＋スリングショット弧
+  - MOVING WARP: 移動方向付きワープ口
+  - LASER CORRIDOR: 複数レーザー回廊
+- 未到達ギミックを隠す既存の段階解放ルールは維持

@@ -90,6 +90,199 @@ window.visualViewport?.addEventListener('resize', () => {
 }, { passive: true });
 
 
+
+function drawManualPreview(canvas, type) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = 184;
+  const height = 92;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.style.width = '100%';
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const cx = width * 0.5;
+  const cy = height * 0.52;
+  ctx.fillStyle = '#02050b';
+  ctx.fillRect(0, 0, width, height);
+
+  // Same dark-space vocabulary as the actual playfield.
+  for (let i = 0; i < 23; i += 1) {
+    const x = ((i * 47 + 13) % 181) + 1;
+    const y = ((i * 31 + 7) % 87) + 2;
+    ctx.globalAlpha = 0.25 + (i % 4) * 0.13;
+    ctx.fillStyle = '#d8ecff';
+    ctx.beginPath();
+    ctx.arc(x, y, i % 5 === 0 ? 1.2 : 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  const ring = (x, y, r, color, widthLine = 2) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = widthLine;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+  const plus = (x, y, color) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 2, y - 9, 4, 18);
+    ctx.fillRect(x - 9, y - 2, 18, 4);
+  };
+  const asteroid = (x, y, r = 20) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(27,39,53,.98)';
+    ctx.strokeStyle = '#52677e';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 9; i += 1) {
+      const a = i / 9 * Math.PI * 2;
+      const rr = r * (0.84 + 0.12 * Math.sin(i * 2.3 + 0.6));
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(110,140,170,.18)';
+    ctx.beginPath();
+    ctx.arc(-r * 0.25, -r * 0.12, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  };
+  const portal = (x, y, r = 25) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.shadowColor = '#7fe9ff';
+    ctx.shadowBlur = 14;
+    for (let i = 0; i < 3; i += 1) {
+      ctx.strokeStyle = i === 0 ? '#b5f8ff' : 'rgba(83,198,255,.55)';
+      ctx.lineWidth = i === 0 ? 3 : 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, r - i * 6, i * 0.7, Math.PI * 2 - i * 0.35);
+      ctx.stroke();
+      ctx.rotate(0.72);
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  };
+
+  if (type === 'warp') {
+    portal(cx, cy, 28);
+  } else if (type === 'asteroid') {
+    asteroid(cx, cy, 25);
+  } else if (type === 'fuel') {
+    ctx.shadowColor = '#68ffad'; ctx.shadowBlur = 13;
+    ring(cx, cy, 18, '#8affbd', 2);
+    ctx.shadowBlur = 0;
+    plus(cx, cy, '#aaffc9');
+  } else if (type === 'mine') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = '#ff6d78';
+    ctx.fillStyle = 'rgb(41,20,27)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i += 1) {
+      const a = i / 8 * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 15, Math.sin(a) * 15);
+      ctx.lineTo(Math.cos(a) * 25, Math.sin(a) * 25);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ff7884'; ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } else if (type === 'wind') {
+    const g = ctx.createRadialGradient(cx, cy, 3, cx, cy, 38);
+    g.addColorStop(0, 'rgba(55,192,255,.18)'); g.addColorStop(1, 'rgba(55,192,255,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(115,224,255,.70)'; ctx.lineWidth = 1.4;
+    for (let y = cy - 22; y <= cy + 22; y += 15) {
+      ctx.beginPath(); ctx.moveTo(cx - 36, y); ctx.lineTo(cx + 29, y);
+      ctx.lineTo(cx + 20, y - 5); ctx.moveTo(cx + 29, y); ctx.lineTo(cx + 20, y + 5); ctx.stroke();
+    }
+  } else if (type === 'gravity' || type === 'slingshot') {
+    const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 38);
+    g.addColorStop(0, 'rgba(152,92,255,.62)');
+    g.addColorStop(0.15, 'rgba(72,42,120,.34)');
+    g.addColorStop(1, 'rgba(72,42,120,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 38, 0, Math.PI * 2); ctx.fill();
+    ring(cx, cy, 14, 'rgba(174,125,255,.70)', 1.4);
+    if (type === 'slingshot') {
+      ctx.strokeStyle = 'rgba(118,236,255,.95)'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(cx, cy, 28, -0.95, 0.95); ctx.stroke();
+      ctx.strokeStyle = 'rgba(118,255,173,.70)';
+      ctx.beginPath(); ctx.moveTo(cx + 31, cy + 4); ctx.lineTo(cx + 50, cy - 7); ctx.stroke();
+    }
+  } else if (type === 'pulse') {
+    ctx.fillStyle = 'rgba(255,126,183,.15)'; ctx.strokeStyle = 'rgba(255,119,176,.82)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ring(cx, cy, 31, 'rgba(255,126,183,.62)', 2.3);
+    ring(cx, cy, 43, 'rgba(255,126,183,.18)', 1.2);
+  } else if (type === 'laser') {
+    ctx.strokeStyle = 'rgba(255,76,99,.88)'; ctx.shadowColor = '#ff3f62'; ctx.shadowBlur = 12; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(cx - 61, cy + 23); ctx.lineTo(cx + 61, cy - 23); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.fillStyle = '#ff8595'; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
+  } else if (type === 'phase') {
+    ctx.shadowColor = '#ff4269'; ctx.shadowBlur = 12; ctx.strokeStyle = 'rgba(255,82,118,.90)'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(cx - 58, cy); ctx.lineTo(cx + 58, cy); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(104,220,255,.24)'; ctx.lineWidth = 2; ctx.setLineDash([7,7]);
+    ctx.beginPath(); ctx.moveTo(cx - 58, cy + 18); ctx.lineTo(cx + 58, cy + 18); ctx.stroke(); ctx.setLineDash([]);
+  } else if (type === 'boost') {
+    ctx.shadowColor = '#65ffac'; ctx.shadowBlur = 12; ring(cx, cy, 24, '#76ffad', 3); ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#76ffad'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx - 10, cy - 7); ctx.lineTo(cx + 11, cy); ctx.lineTo(cx - 10, cy + 7); ctx.stroke();
+  } else if (type === 'drag') {
+    const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, 39);
+    g.addColorStop(0, 'rgba(126,119,170,.30)'); g.addColorStop(0.65, 'rgba(73,72,112,.20)'); g.addColorStop(1, 'rgba(45,45,80,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 39, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(159,151,207,.34)'; ctx.lineWidth = 1;
+    [15,24,33].forEach((r,i)=>{ctx.beginPath();ctx.arc(cx+(i-1)*7,cy+(1-i)*5,r,0,Math.PI*2);ctx.stroke();});
+  } else if (type === 'movingWarp') {
+    portal(cx + 16, cy, 23);
+    ctx.strokeStyle = 'rgba(103,223,255,.50)'; ctx.lineWidth = 1.3; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(cx - 53, cy); ctx.lineTo(cx + 53, cy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#77e9ff';
+    ctx.beginPath(); ctx.moveTo(cx - 50,cy);ctx.lineTo(cx-41,cy-5);ctx.lineTo(cx-41,cy+5);ctx.fill();
+    ctx.beginPath(); ctx.moveTo(cx + 50,cy);ctx.lineTo(cx+41,cy-5);ctx.lineTo(cx+41,cy+5);ctx.fill();
+  } else if (type === 'velocity') {
+    ctx.strokeStyle = 'rgba(116,226,255,.36)'; ctx.lineWidth = 1.5;
+    for (let i = 0; i < 13; i += 1) {
+      const y = 8 + i * 7;
+      const x = 22 + (i % 4) * 13;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 52, y); ctx.stroke();
+    }
+    // Three alternating openings.
+    const rows = [
+      { y: 25, gapX: 125 }, { y: 49, gapX: 60 }, { y: 73, gapX: 125 },
+    ];
+    rows.forEach((row) => {
+      for (let x = 24; x <= 160; x += 17) {
+        if (Math.abs(x - row.gapX) < 22) continue;
+        asteroid(x, row.y, 5.5);
+      }
+    });
+    ctx.fillStyle = '#dfe9f1';
+    ctx.beginPath(); ctx.moveTo(cx, 12); ctx.lineTo(cx-6,22); ctx.lineTo(cx+6,22); ctx.closePath(); ctx.fill();
+  } else if (type === 'corridor') {
+    ctx.strokeStyle = 'rgba(255,76,99,.82)'; ctx.shadowColor = '#ff3f62'; ctx.shadowBlur = 8; ctx.lineWidth = 4;
+    for (const [x1,y1,x2,y2] of [[18,70,83,22],[45,82,120,12],[88,82,164,30]]) {
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    portal(153, 20, 13);
+  }
+
+  ctx.strokeStyle = 'rgba(111,179,219,.28)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, width - 1, height - 1);
+}
+
 const MANUAL_GIMMICKS = [
   { firstStage: 1, type: 'warp', name: 'WARP PORTAL', tag: 'GOAL', desc: 'シアンのリングが出口。機体がリングへ触れればステージクリア。高速で進入してもよい。' },
   { firstStage: 3, type: 'asteroid', name: 'ASTEROID', tag: 'HAZARD', desc: '固定障害物。接触すると爆発。慣性が強いほど早めの進路変更が必要。' },
@@ -126,9 +319,10 @@ function renderManual(maxStage) {
     card.className = 'manual-gimmick-card';
     card.dataset.type = item.type;
 
-    const icon = document.createElement('div');
-    icon.className = 'manual-gimmick-icon';
-    icon.textContent = item.tag === 'SPECIAL' ? '◆' : item.name.slice(0, 1);
+    const preview = document.createElement('canvas');
+    preview.className = 'manual-gimmick-preview';
+    preview.setAttribute('role', 'img');
+    preview.setAttribute('aria-label', item.name + ' のゲーム内表示例');
 
     const body = document.createElement('div');
     const meta = document.createElement('div');
@@ -144,8 +338,9 @@ function renderManual(maxStage) {
     const desc = document.createElement('p');
     desc.textContent = item.desc;
     body.append(meta, name, desc);
-    card.append(icon, body);
+    card.append(preview, body);
     manualGimmickList.append(card);
+    drawManualPreview(preview, item.type);
   }
 }
 
