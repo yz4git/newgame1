@@ -31,15 +31,26 @@ function pointSegmentDistance(px, py, ax, ay, bx, by) {
 
 function createStage(index) {
   const n = index + 1;
+  const sectorLength = 6;
+  const sectorIndex = Math.floor(index / sectorLength) + 1;
+  const sectorStage = index % sectorLength + 1;
+  const sectorFinal = sectorStage === sectorLength;
+  const sectorNames = ['DRIFT FRONTIER', 'GRAVITY REACH', 'PHASE BELT', 'DEEP VECTOR'];
+  const sectorName = sectorNames[(sectorIndex - 1) % sectorNames.length];
+  const specialCycle = ['VELOCITY_ENTRY', 'SLINGSHOT_ARC', 'MOVING_WARP', 'LASER_CORRIDOR'];
+  const specialType = sectorFinal ? specialCycle[(sectorIndex - 1) % specialCycle.length] : null;
+
   const rnd = seededRandom(n * 7919);
-  const angle = n === 1 ? 0 : rnd() * TAU;
+  const angle = specialType === 'VELOCITY_ENTRY' ? -Math.PI * 0.5 : (n === 1 ? 0 : rnd() * TAU);
   const dir = { x: Math.cos(angle), y: Math.sin(angle) };
   const perp = { x: -dir.y, y: dir.x };
   const distance = 500 + Math.min(360, n * 11);
   const portal = { x: dir.x * distance, y: dir.y * distance };
-  const time = Math.max(6.5, 10.5 - Math.min(3.2, n * 0.08));
+  let time = Math.max(6.5, 10.5 - Math.min(3.2, n * 0.08));
   const portalRadius = Math.max(27, 43 - Math.min(16, n * 0.55));
-  const fuelStart = Math.max(58, 88 - Math.min(30, n * 1.15));
+  let fuelStart = Math.max(58, 88 - Math.min(30, n * 1.15));
+  let startVelocity = null;
+  let portalMotion = null;
 
   const asteroids = [];
   const asteroidCount = n < 3 ? 0 : Math.min(10, 1 + Math.floor((n - 2) / 2));
@@ -85,6 +96,8 @@ function createStage(index) {
       range: 150 + rnd() * 45,
       strength: 95 + Math.min(95, n * 3.0),
       r: 18,
+      slingCharge: 0,
+      slingUsed: false,
     });
   }
 
@@ -194,6 +207,47 @@ function createStage(index) {
     });
   }
 
+  if (specialType === 'VELOCITY_ENTRY') {
+    startVelocity = { x: 0, y: -185 };
+    time += 1.2;
+  } else if (specialType === 'SLINGSHOT_ARC') {
+    fuelStart = Math.min(fuelStart, 26);
+    time += 2.0;
+    wells.length = 0;
+    for (let i = 0; i < 2; i += 1) {
+      const t = i === 0 ? 0.38 : 0.66;
+      const side = i === 0 ? 1 : -1;
+      wells.push({
+        x: portal.x * t + perp.x * side * 82,
+        y: portal.y * t + perp.y * side * 82,
+        range: 196,
+        strength: 238,
+        r: 20,
+        slingCharge: 0,
+        slingUsed: false,
+        special: true,
+      });
+    }
+  } else if (specialType === 'MOVING_WARP') {
+    portalMotion = { baseX: portal.x, baseY: portal.y, axisX: perp.x, axisY: perp.y, amp: 105, speed: 1.25, phase: 0 };
+    time += 1.5;
+  } else if (specialType === 'LASER_CORRIDOR') {
+    time += 1.4;
+    for (let i = 0; i < 3; i += 1) {
+      const t = 0.30 + i * 0.20;
+      const side = i % 2 === 0 ? 1 : -1;
+      lasers.push({
+        x: portal.x * t + perp.x * side * 30,
+        y: portal.y * t + perp.y * side * 30,
+        len: 72 + i * 7,
+        angle: Math.atan2(perp.y, perp.x),
+        speed: side * (0.28 + i * 0.06),
+        width: 5,
+        corridor: true,
+      });
+    }
+  }
+
   const margin = 420;
   const minX = Math.min(0, portal.x) - margin;
   const maxX = Math.max(0, portal.x) + margin;
@@ -212,6 +266,10 @@ function createStage(index) {
   if (n === 14) title = 'PHASE GATE';
   if (n === 17) title = 'BOOST RING';
   if (n === 21) title = 'DRAG CLOUD';
+  if (specialType === 'VELOCITY_ENTRY') title = 'SPECIAL · VELOCITY ENTRY';
+  if (specialType === 'SLINGSHOT_ARC') title = 'SPECIAL · SLINGSHOT ARC';
+  if (specialType === 'MOVING_WARP') title = 'SPECIAL · MOVING WARP';
+  if (specialType === 'LASER_CORRIDOR') title = 'SPECIAL · LASER CORRIDOR';
 
   let hint = n <= 2
     ? 'スティック方向にノズル。JETで反対方向へ加速'
@@ -224,7 +282,11 @@ function createStage(index) {
   if (n === 10) hint = 'PULSE BEACONの衝撃波周期を見てラインを選ぶ';
   if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
   if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
-  if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く抜けるか迂回';
+  if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く横切るか迂回';
+  if (specialType === 'VELOCITY_ENTRY') hint = '高速で侵入。最初の慣性を殺さずラインを作る';
+  if (specialType === 'SLINGSHOT_ARC') hint = '燃料は少ない。重力井戸へ接近し、接線速度を出口へ変える';
+  if (specialType === 'MOVING_WARP') hint = 'ワープ口が横移動する。到達時刻まで読んで進路を合わせる';
+  if (specialType === 'LASER_CORRIDOR') hint = 'レーザーの周期を読み、狭い回廊を一気に抜ける';
 
   return {
     n,
@@ -232,7 +294,16 @@ function createStage(index) {
     time,
     fuelStart,
     portal,
+    portalBase: { x: portal.x, y: portal.y },
+    portalMotion,
     portalRadius,
+    startVelocity,
+    sectorIndex,
+    sectorStage,
+    sectorLength,
+    sectorFinal,
+    sectorName,
+    specialType,
     bounds: { minX, maxX, minY, maxY },
     asteroids,
     mines,
@@ -729,12 +800,15 @@ export class JetDriftGame {
     this.onFx = () => {};
     this.records = this.loadRecords();
     this.ghostStore = this.loadGhostStore();
+    this.bestGhostStore = this.loadBestGhostStore();
     this.ghostTrail = [];
+    this.bestGhostTrail = [];
     this.currentTrail = [];
     this.stageElapsed = 0;
     this.trailSampleTimer = 0;
     this.pathLength = 0;
     this.lastLineRating = null;
+    this.warpTravelDir = { x: 0, y: -1 };
     this.wireframeWarpEnabled = true;
     try {
       const savedWarpMode = localStorage.getItem('jetDriftWireframeWarpV1');
@@ -803,6 +877,59 @@ export class JetDriftGame {
       .map((p) => ({ x: p[0], y: p[1], t: p[2] / 100 }));
   }
 
+  loadBestGhostStore() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('jetDriftBestGhostsV1') || '{}');
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  getBestGhostTrail(index) {
+    const entry = this.bestGhostStore[String(index)];
+    const packed = entry?.trail;
+    if (!Array.isArray(packed)) return [];
+    return packed
+      .filter((p) => Array.isArray(p) && p.length >= 3 && p.every(Number.isFinite))
+      .slice(0, 180)
+      .map((p) => ({ x: p[0], y: p[1], t: p[2] / 100 }));
+  }
+
+  packCurrentTrail() {
+    return this.currentTrail.map((p) => [
+      Math.round(p.x),
+      Math.round(p.y),
+      Math.round(p.t * 100),
+    ]);
+  }
+
+  saveBestGhost(rating) {
+    if (!this.currentTrail || this.currentTrail.length < 2) return false;
+    this.recordTrailPoint(true);
+    const key = String(this.stageIndex);
+    const previous = this.bestGhostStore[key];
+    const elapsed = this.stageElapsed;
+    const isBetter = !previous
+      || rating.score > Number(previous.score || 0)
+      || (rating.score === Number(previous.score || 0) && elapsed < Number(previous.time || Infinity));
+    if (!isBetter) return false;
+
+    this.bestGhostStore[key] = {
+      score: rating.score,
+      time: Math.round(elapsed * 100) / 100,
+      trail: this.packCurrentTrail(),
+    };
+    const endlessKeys = Object.keys(this.bestGhostStore)
+      .filter((k) => Number(k) >= 24)
+      .sort((a, b) => Number(a) - Number(b));
+    while (Object.keys(this.bestGhostStore).length > 64 && endlessKeys.length) {
+      delete this.bestGhostStore[endlessKeys.shift()];
+    }
+    try { localStorage.setItem('jetDriftBestGhostsV1', JSON.stringify(this.bestGhostStore)); } catch {}
+    return true;
+  }
+
   recordTrailPoint(force = false) {
     if (!this.currentTrail) return;
     const p = this.player;
@@ -825,11 +952,7 @@ export class JetDriftGame {
     if (!this.currentTrail || this.currentTrail.length < 2) return;
     this.recordTrailPoint(true);
     const key = String(this.stageIndex);
-    this.ghostStore[key] = this.currentTrail.map((p) => [
-      Math.round(p.x),
-      Math.round(p.y),
-      Math.round(p.t * 100),
-    ]);
+    this.ghostStore[key] = this.packCurrentTrail();
     const endlessKeys = Object.keys(this.ghostStore)
       .filter((k) => Number(k) >= 24)
       .sort((a, b) => Number(a) - Number(b));
@@ -901,14 +1024,17 @@ export class JetDriftGame {
     this.stage = createStage(index);
     this.player.x = 0;
     this.player.y = 0;
-    this.player.vx = 0;
-    this.player.vy = 0;
-    this.player.angle = warpOut ? -Math.PI * 0.5 : 0;
+    this.player.vx = this.stage.startVelocity?.x || 0;
+    this.player.vy = this.stage.startVelocity?.y || 0;
+    this.player.angle = warpOut
+      ? -Math.PI * 0.5
+      : (this.stage.startVelocity ? Math.atan2(this.player.vy, this.player.vx) : 0);
     this.aimX = -Math.cos(this.player.angle);
     this.aimY = -Math.sin(this.player.angle);
     this.fuel = this.stage.fuelStart;
     this.timeLeft = this.stage.time;
     this.ghostTrail = this.getGhostTrail(index);
+    this.bestGhostTrail = this.getBestGhostTrail(index);
     this.currentTrail = [{ x: 0, y: 0, t: 0 }];
     this.stageElapsed = 0;
     this.trailSampleTimer = 0;
@@ -927,12 +1053,19 @@ export class JetDriftGame {
     this.audio.stopJet();
     this.audio.stopSfx();
     void this.audio.startMusic('slow');
+    if (!warpOut) {
+      this.warpTravelDir = normalize(this.stage.portal.x, this.stage.portal.y, 0, -1);
+    }
     if (warpOut) {
       this.audio.warpOut();
       if (this.wireframeWarpEnabled) this.onFx('warp3dOut');
     }
     if (!silent) {
-      this.onToast('STAGE ' + String(index + 1).padStart(index >= 24 ? 3 : 2, '0') + ' · ' + this.stage.title, this.stage.hint);
+      const special = this.stage.specialType ? ' · SPECIAL' : '';
+      this.onToast(
+        'SECTOR ' + String(this.stage.sectorIndex).padStart(2, '0') + ' · ' + this.stage.sectorStage + '/' + this.stage.sectorLength + special,
+        this.stage.title + ' · ' + this.stage.hint,
+      );
     }
     this.onChange('stage', this.getSnapshot());
   }
@@ -978,6 +1111,11 @@ export class JetDriftGame {
       speed: Math.hypot(this.player.vx, this.player.vy),
       attempts: this.attempts,
       endless: this.stageIndex >= 24,
+      sectorIndex: this.stage.sectorIndex,
+      sectorStage: this.stage.sectorStage,
+      sectorLength: this.stage.sectorLength,
+      sectorName: this.stage.sectorName,
+      specialType: this.stage.specialType,
       wireframeWarp: this.wireframeWarpEnabled,
     };
   }
@@ -1002,9 +1140,15 @@ export class JetDriftGame {
     this.recordTrailPoint(true);
     const rating = this.evaluateLine();
     this.lastLineRating = rating;
+    const newBestGhost = this.saveBestGhost(rating);
     this.saveCurrentGhost();
+    const velocity = Math.hypot(this.player.vx, this.player.vy);
+    this.warpTravelDir = velocity > 20
+      ? normalize(this.player.vx, this.player.vy, this.stage.portal.x, this.stage.portal.y)
+      : normalize(this.stage.portal.x - this.player.x, this.stage.portal.y - this.player.y, 0, -1);
     const lineBonus = rating.score * 3;
-    const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus);
+    const sectorBonus = this.stage.sectorFinal ? 500 + this.stage.sectorIndex * 100 : 0;
+    const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus + sectorBonus);
     this.score += bonus;
     this.clearTimer = this.wireframeWarpEnabled ? 1.58 : 1.00;
     this.thrusting = false;
@@ -1014,8 +1158,11 @@ export class JetDriftGame {
     this.records.furthest = Math.max(this.records.furthest, this.stageIndex + 2);
     this.records.bestScore = Math.max(this.records.bestScore, this.score);
     this.saveRecords();
+    const clearPrefix = this.stage.sectorFinal
+      ? 'SECTOR ' + String(this.stage.sectorIndex).padStart(2, '0') + ' CLEAR · '
+      : '';
     this.onToast(
-      'LINE ' + rating.grade + ' · WARP DRIVE',
+      clearPrefix + (newBestGhost ? 'NEW BEST · ' : '') + 'LINE ' + rating.grade,
       'PATH ' + rating.ratio.toFixed(2) + 'x · FUEL ' + Math.round(this.fuel) + '% · +' + bonus,
     );
     this.onChange('hud', this.getSnapshot());
@@ -1087,6 +1234,14 @@ export class JetDriftGame {
 
     this.stageElapsed += dt;
     this.trailSampleTimer += dt;
+
+    if (this.stage.portalMotion) {
+      const motion = this.stage.portalMotion;
+      const offset = Math.sin(this.stageElapsed * motion.speed + motion.phase) * motion.amp;
+      this.stage.portal.x = motion.baseX + motion.axisX * offset;
+      this.stage.portal.y = motion.baseY + motion.axisY * offset;
+    }
+
     this.timeLeft -= dt;
     if (!this.timeWarned && this.timeLeft <= 4) {
       this.timeWarned = true;
@@ -1114,9 +1269,37 @@ export class JetDriftGame {
       const dy = well.y - p.y;
       const d = Math.hypot(dx, dy);
       if (d < well.range && d > 2) {
-        const pull = (1 - d / well.range) * well.strength;
-        ax += dx / d * pull;
-        ay += dy / d * pull;
+        const nx = dx / d;
+        const ny = dy / d;
+        const closeness = 1 - d / well.range;
+        const pull = (closeness * 0.72 + closeness * closeness * 1.18) * well.strength;
+        ax += nx * pull;
+        ay += ny * pull;
+
+        const tangentX = -ny;
+        const tangentY = nx;
+        const tangentialSpeed = Math.abs(p.vx * tangentX + p.vy * tangentY);
+        if (!well.slingUsed && d < well.range * 0.60 && tangentialSpeed > 48) {
+          const charge = tangentialSpeed * (0.45 + closeness);
+          well.slingCharge = Math.max(well.slingCharge || 0, charge);
+        }
+
+        if (!well.slingUsed && (well.slingCharge || 0) > 35 && d > well.range * 0.62) {
+          const outX = -nx;
+          const outY = -ny;
+          const outwardSpeed = p.vx * outX + p.vy * outY;
+          if (outwardSpeed > 18) {
+            const speedNow = Math.max(1, Math.hypot(p.vx, p.vy));
+            const boost = 38 + Math.min(74, (well.slingCharge || 0) * 0.34);
+            p.vx += p.vx / speedNow * boost;
+            p.vy += p.vy / speedNow * boost;
+            well.slingUsed = true;
+            this.score += Math.round(180 + boost * 2);
+            this.audio.pickup();
+            this.onFx('pickup');
+            this.onToast('GRAVITY SLINGSHOT', '+' + Math.round(boost) + ' VELOCITY');
+          }
+        }
       }
     }
 
@@ -1302,6 +1485,25 @@ export class JetDriftGame {
     return null;
   }
 
+  getProjectionForward() {
+    const target = normalize(
+      this.stage.portal.x - this.player.x,
+      this.stage.portal.y - this.player.y,
+      0,
+      -1,
+    );
+    const projection = this.getWarpProjection();
+    if (projection?.phase !== 'out' || !this.warpTravelDir) return target;
+
+    const blend = this.smoothWarp(clamp((projection.t - 0.26) / 0.48, 0, 1));
+    return normalize(
+      lerp(this.warpTravelDir.x, target.x, blend),
+      lerp(this.warpTravelDir.y, target.y, blend),
+      target.x,
+      target.y,
+    );
+  }
+
   worldToScreen(x, y) {
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
@@ -1317,7 +1519,7 @@ export class JetDriftGame {
 
     // The existing 2D stage plane itself becomes an X/Z plane.
     // The route from stage origin to the goal is used as the camera-forward axis.
-    const forward = normalize(this.stage.portal.x, this.stage.portal.y, 1, 0);
+    const forward = this.getProjectionForward();
     const rightX = -forward.y;
     const rightY = forward.x;
     const lateral = dx * rightX + dy * rightY;
@@ -1506,6 +1708,14 @@ export class JetDriftGame {
     ctx.beginPath();
     ctx.arc(0, 0, 20 + Math.sin(this.globalTime * 2.2) * 3, 0, TAU);
     ctx.stroke();
+
+    if ((well.slingCharge || 0) > 35 || well.slingUsed) {
+      ctx.strokeStyle = well.slingUsed ? 'rgba(118,255,173,.42)' : 'rgba(118,236,255,.88)';
+      ctx.lineWidth = well.slingUsed ? 1.2 : 2.1;
+      ctx.beginPath();
+      ctx.arc(0, 0, well.range * 0.58, -0.85, 0.85);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1554,27 +1764,28 @@ export class JetDriftGame {
     ctx.restore();
   }
 
-  drawGhostTrail(ctx) {
-    if (!this.ghostTrail || this.ghostTrail.length < 2 || this.clearTimer > 0) return;
+  drawGhostPath(ctx, trail, style) {
+    if (!trail || trail.length < 2) return;
+
     ctx.save();
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = 'rgba(126,232,255,.28)';
-    ctx.setLineDash([6, 7]);
+    ctx.lineWidth = style.lineWidth;
+    ctx.strokeStyle = style.stroke;
+    ctx.setLineDash(style.dash);
     ctx.beginPath();
-    for (let i = 0; i < this.ghostTrail.length; i += 1) {
-      const p = this.worldToScreen(this.ghostTrail[i].x, this.ghostTrail[i].y);
+    for (let i = 0; i < trail.length; i += 1) {
+      const p = this.worldToScreen(trail[i].x, trail[i].y);
       if (i === 0) ctx.moveTo(p.x, p.y);
       else ctx.lineTo(p.x, p.y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
 
-    let ghost = this.ghostTrail[this.ghostTrail.length - 1];
+    let ghost = trail[trail.length - 1];
     let ghostAngle = 0;
-    for (let i = 1; i < this.ghostTrail.length; i += 1) {
-      if (this.ghostTrail[i].t >= this.stageElapsed) {
-        const a = this.ghostTrail[i - 1];
-        const b = this.ghostTrail[i];
+    for (let i = 1; i < trail.length; i += 1) {
+      if (trail[i].t >= this.stageElapsed) {
+        const a = trail[i - 1];
+        const b = trail[i];
         const span = Math.max(0.001, b.t - a.t);
         const mix = clamp((this.stageElapsed - a.t) / span, 0, 1);
         ghost = { x: lerp(a.x, b.x, mix), y: lerp(a.y, b.y, mix) };
@@ -1582,15 +1793,16 @@ export class JetDriftGame {
         break;
       }
     }
+
     const s = this.worldToScreen(ghost.x, ghost.y);
     if (s.x > -30 && s.x < this.width + 30 && s.y > -30 && s.y < this.height + 30) {
       ctx.translate(s.x, s.y);
       ctx.scale(s.scale || 1, (s.scale || 1) * (s.squash || 1));
       ghostAngle = this.screenAngleForVector(ghost.x, ghost.y, Math.cos(ghostAngle), Math.sin(ghostAngle));
       ctx.rotate(ghostAngle);
-      ctx.fillStyle = 'rgba(190,247,255,.35)';
-      ctx.shadowColor = '#82e9ff';
-      ctx.shadowBlur = 10;
+      ctx.fillStyle = style.fill;
+      ctx.shadowColor = style.shadow;
+      ctx.shadowBlur = style.shadowBlur;
       ctx.beginPath();
       ctx.moveTo(8, 0);
       ctx.lineTo(-6, -5);
@@ -1600,11 +1812,37 @@ export class JetDriftGame {
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.rotate(-ghostAngle);
-      ctx.font = '700 7px ui-monospace, monospace';
-      ctx.fillStyle = 'rgba(160,230,255,.55)';
-      ctx.fillText('GHOST', 10, -8);
+      ctx.font = '800 7px ui-monospace, monospace';
+      ctx.fillStyle = style.labelColor;
+      ctx.fillText(style.label, 10, -8);
     }
     ctx.restore();
+  }
+
+  drawGhostTrail(ctx) {
+    if (this.clearTimer > 0) return;
+
+    this.drawGhostPath(ctx, this.ghostTrail, {
+      stroke: 'rgba(108,218,255,.24)',
+      fill: 'rgba(153,232,255,.30)',
+      shadow: '#5edcff',
+      shadowBlur: 8,
+      labelColor: 'rgba(133,218,246,.52)',
+      label: 'LAST',
+      dash: [6, 7],
+      lineWidth: 1.45,
+    });
+
+    this.drawGhostPath(ctx, this.bestGhostTrail, {
+      stroke: 'rgba(244,252,255,.42)',
+      fill: 'rgba(245,253,255,.52)',
+      shadow: '#ffffff',
+      shadowBlur: 11,
+      labelColor: 'rgba(245,253,255,.76)',
+      label: 'BEST',
+      dash: [2, 5],
+      lineWidth: 1.8,
+    });
   }
 
   drawWind(ctx, wind) {
@@ -2001,7 +2239,7 @@ export class JetDriftGame {
     const projection = this.getWarpProjection();
     if (!projection || projection.mix <= 0.02) return;
 
-    const forward = normalize(this.stage.portal.x, this.stage.portal.y, 1, 0);
+    const forward = this.getProjectionForward();
     const right = { x: -forward.y, y: forward.x };
     const alpha = 0.04 + projection.mix * 0.22;
     const centerX = this.player.x;

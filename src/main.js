@@ -74,8 +74,11 @@ window.visualViewport?.addEventListener('resize', () => {
 
 function syncHud(snapshot = game.getSnapshot()) {
   const no = String(snapshot.stageIndex + 1).padStart(snapshot.stageIndex >= 24 ? 3 : 2, '0');
-  stageNumber.textContent = snapshot.endless ? 'STAGE ' + no + ' / ∞' : 'STAGE ' + no + ' / 24';
-  stageName.textContent = snapshot.stageName;
+  const sectorNo = String(snapshot.sectorIndex || 1).padStart(2, '0');
+  const sectorStage = snapshot.sectorStage || 1;
+  const sectorLength = snapshot.sectorLength || 6;
+  stageNumber.textContent = 'SECTOR ' + sectorNo + ' · ' + sectorStage + '/' + sectorLength + ' · STAGE ' + no;
+  stageName.textContent = (snapshot.specialType ? '◆ ' : '') + (snapshot.sectorName || '') + ' · ' + snapshot.stageName;
   stageHint.textContent = snapshot.stageHint;
   fuelValue.textContent = Math.round(snapshot.fuel) + '%';
   fuelFill.style.width = clamp(snapshot.fuel, 0, 100) + '%';

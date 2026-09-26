@@ -260,3 +260,58 @@ v1.7.1の「2D→3Dへ投影そのものが変形する」仕組みを維持し�
 - FAIL表示は `LOST IN SPACE`
 - マップ内では従来どおり、燃料0でも慣性が残っていればそのまま航行可能
 - マップ内で燃料0かつ低速になった場合の従来OUT OF FUEL判定も維持
+
+## v1.9.0 — Ghost Rival / Continuous Warp / Slingshot / Sectors / Specials
+
+### 1. LAST + BEST Ghost
+- 前回走行と自己ベスト走行を別々に保存
+- LASTは青い破線、BESTは白い細破線
+- 両方とも走行時間に同期した半透明機体を表示
+- BESTはLINE評価点を優先し、同点ならクリア時間が速い走行へ更新
+- 自己ベスト更新時は `NEW BEST` を表示
+- localStorageのみ使用
+
+### 2. Stage-to-Stage Warp Continuity
+- クリア時の実際の進行速度ベクトルをワープ進行方向として保存
+- 次ステージのワープアウト3D視点は前ステージの進行方向から開始
+- ワープアウト中に次ステージの進行方向へ滑らかにカメラ軸を補間
+- 自機のワープアウト後の上向き開始仕様は維持
+- 2D→3D→ハイパースペース→次ステージ3D→2Dの流れを維持
+
+### 3. Gravity Slingshot
+- 重力井戸の引力カーブを近距離ほど強くなる形へ変更
+- 重力井戸の内側で十分な接線速度を作るとSLINGSHOT charge
+- 外向きに抜けた瞬間、現在の進行方向へ追加速度を付与
+- `GRAVITY SLINGSHOT` と追加VELOCITYを表示
+- スコアボーナスあり
+- charge時は重力井戸にシアンの弧、使用後は緑の弧を表示
+
+### 4. SECTOR System
+- 6ステージを1 SECTORとしてグループ化
+- HUDを `SECTOR 01 · 1/6 · STAGE 01` 表示へ変更
+- SECTORごとに名称を付与
+- 6面目は必ずSPECIALステージ
+- SECTOR最終面クリア時はSECTOR CLEAR表示と追加ボーナス
+- ENDLESS以降も6面単位のSECTOR構成を継続
+
+### 5. Special Stages
+SPECIALはSECTORごとに循環。
+
+1. `VELOCITY ENTRY`
+   - 上向きに高速初速を持った状態から開始
+   - 最初の慣性を殺さず攻略するステージ
+
+2. `SLINGSHOT ARC`
+   - 初期燃料を大幅に制限
+   - 2つの強い重力井戸を配置
+   - JETだけでなく重力スリングショットを使うことが主攻略
+
+3. `MOVING WARP`
+   - ゴールのワープ口が進行方向と直交する軸で周期移動
+   - 到達時刻を読んで進路を先回りする
+
+4. `LASER CORRIDOR`
+   - 通常レーザーに加え、進行ルート上へ3本の回転レーザーを追加
+   - 周期を見て狭い区間を抜ける
+
+最初の24ステージでは STAGE 06 / 12 / 18 / 24 がそれぞれ上記SPECIALになり、ENDLESSでは4種類を循環する。
