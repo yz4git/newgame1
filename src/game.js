@@ -1744,7 +1744,6 @@ export class JetDriftGame {
     let cx = projected.x;
     let cy = projected.y;
     let shipScale = clamp(projected.scale || 1, 0.20, 2.0);
-    let cinematicRotation = 0;
     const warpProjection = this.getWarpProjection();
 
     if (warpProjection?.phase === 'in') {
@@ -1752,20 +1751,17 @@ export class JetDriftGame {
       cx = lerp(cx, this.width * 0.5, travel * 0.34);
       cy = lerp(cy, this.height * 0.34, travel);
       shipScale *= 1 - travel * 0.90;
-      cinematicRotation = travel * TAU * 1.85;
     } else if (warpProjection?.phase === 'out') {
       const emerge = this.smoothWarp(clamp((warpProjection.t - 0.26) / 0.42, 0, 1));
       cx = lerp(this.width * 0.5, cx, emerge);
       cy = lerp(this.height * 0.34, cy, emerge);
       shipScale *= 0.10 + emerge * 0.90;
-      cinematicRotation = (1 - emerge) * TAU * 1.45;
     }
 
     const nozzleAngle = this.screenAngleForVector(p.x, p.y, this.aimX, this.aimY);
     const shipAngle = this.screenAngleForVector(p.x, p.y, Math.cos(p.angle), Math.sin(p.angle));
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(cinematicRotation);
     ctx.scale(shipScale, shipScale);
 
     if (this.thrusting && this.fuel > 0 && this.failTimer <= 0) {
