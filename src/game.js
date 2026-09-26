@@ -209,7 +209,17 @@ function createStage(index) {
 
   if (specialType === 'VELOCITY_ENTRY') {
     startVelocity = { x: 0, y: -185 };
-    time += 1.2;
+    portal.x += perp.x * 150;
+    portal.y += perp.y * 150;
+    asteroids.push({
+      x: dir.x * distance * 0.50,
+      y: dir.y * distance * 0.50,
+      r: 38,
+      spin: 0.32,
+      phase: 0.35,
+      special: true,
+    });
+    time += 1.4;
   } else if (specialType === 'SLINGSHOT_ARC') {
     fuelStart = Math.min(fuelStart, 26);
     time += 2.0;
@@ -283,7 +293,7 @@ function createStage(index) {
   if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
   if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
   if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く横切るか迂回';
-  if (specialType === 'VELOCITY_ENTRY') hint = '高速で侵入。最初の慣性を殺さずラインを作る';
+  if (specialType === 'VELOCITY_ENTRY') hint = '高速侵入。中央障害物を避け、横へずれたワープ口へラインを曲げる';
   if (specialType === 'SLINGSHOT_ARC') hint = '燃料は少ない。重力井戸へ接近し、接線速度を出口へ変える';
   if (specialType === 'MOVING_WARP') hint = 'ワープ口が横移動する。到達時刻まで読んで進路を合わせる';
   if (specialType === 'LASER_CORRIDOR') hint = 'レーザーの周期を読み、狭い回廊を一気に抜ける';
@@ -1038,6 +1048,7 @@ export class JetDriftGame {
     this.currentTrail = [{ x: 0, y: 0, t: 0 }];
     this.stageElapsed = 0;
     this.trailSampleTimer = 0;
+    this.stageStarted = false;
     this.pathLength = 0;
     this.lastLineRating = null;
     this.failTimer = 0;
@@ -1070,14 +1081,32 @@ export class JetDriftGame {
     this.onChange('stage', this.getSnapshot());
   }
 
+  startStageRun() {
+    if (
+      this.stageStarted ||
+      this.state !== 'playing' ||
+      this.paused ||
+      this.failTimer > 0 ||
+      this.clearTimer > 0 ||
+      this.warpOutTimer > 0
+    ) return false;
+
+    this.stageStarted = true;
+    this.onChange('hud', this.getSnapshot());
+    return true;
+  }
+
   setNozzle(x, y) {
     const n = normalize(x, y, this.aimX, this.aimY);
     this.aimX = n.x;
     this.aimY = n.y;
+    this.startStageRun();
   }
 
   setThrusting(v) {
-    const next = Boolean(v) && this.state === 'playing' && !this.paused && this.failTimer <= 0 && this.clearTimer <= 0 && this.warpOutTimer <= 0;
+    const wantsThrust = Boolean(v);
+    if (wantsThrust) this.startStageRun();
+    const next = wantsThrust && this.state === 'playing' && !this.paused && this.failTimer <= 0 && this.clearTimer <= 0 && this.warpOutTimer <= 0;
     if (next === this.thrusting) return;
     this.thrusting = next;
     if (next) {
@@ -1116,6 +1145,7 @@ export class JetDriftGame {
       sectorLength: this.stage.sectorLength,
       sectorName: this.stage.sectorName,
       specialType: this.stage.specialType,
+      stageStarted: this.stageStarted,
       wireframeWarp: this.wireframeWarpEnabled,
     };
   }
@@ -1169,7 +1199,7 @@ export class JetDriftGame {
   }
 
   minePosition(mine) {
-    const s = Math.sin(this.globalTime * mine.speed + mine.phase) * mine.amp;
+    const s = Math.sin(this.stageElapsed * mine.speed + mine.phase) * mine.amp;
     return {
       x: mine.bx + mine.axisX * s,
       y: mine.by + mine.axisY * s,
@@ -1177,7 +1207,7 @@ export class JetDriftGame {
   }
 
   laserSegment(laser) {
-    const a = laser.angle + this.globalTime * laser.speed;
+    const a = laser.angle + this.stageElapsed * laser.speed;
     const dx = Math.cos(a) * laser.len;
     const dy = Math.sin(a) * laser.len;
     return {
@@ -1229,6 +1259,14 @@ export class JetDriftGame {
     if (this.failTimer > 0) {
       this.failTimer -= dt;
       if (this.failTimer <= 0) this.startStage(this.stageIndex, true);
+      return;
+    }
+
+    if (!this.stageStarted) {
+      if (this.hudTimer >= 0.1) {
+        this.hudTimer = 0;
+        this.onChange('hud', this.getSnapshot());
+      }
       return;
     }
 
@@ -1607,7 +1645,7 @@ export class JetDriftGame {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
-    ctx.rotate(this.globalTime * 0.7);
+    ctx.rotate(this.stageElapsed * 0.7);
     ctx.shadowColor = '#7fe9ff';
     ctx.shadowBlur = 22;
     for (let i = 0; i < 3; i += 1) {
@@ -1632,7 +1670,7 @@ export class JetDriftGame {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
-    ctx.rotate(this.globalTime * a.spin + a.phase);
+    ctx.rotate(this.stageElapsed * a.spin + a.phase);
     const warpMix = p.mix || 0;
     ctx.fillStyle = `rgba(27,39,53,${1 - warpMix * 0.82})`;
     ctx.strokeStyle = warpMix > 0.02
@@ -1666,7 +1704,7 @@ export class JetDriftGame {
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
-    ctx.rotate(-this.globalTime * 1.4);
+    ctx.rotate(-this.stageElapsed * 1.4);
     const warpMix = p.mix || 0;
     ctx.strokeStyle = warpMix > 0.02 ? 'rgba(255,111,151,.94)' : '#ff6d78';
     ctx.fillStyle = `rgba(41,20,27,${1 - warpMix * 0.76})`;
@@ -1684,7 +1722,7 @@ export class JetDriftGame {
     ctx.stroke();
     ctx.fillStyle = '#ff7884';
     ctx.beginPath();
-    ctx.arc(0, 0, 4 + Math.sin(this.globalTime * 5) * 1.2, 0, TAU);
+    ctx.arc(0, 0, 4 + Math.sin(this.stageElapsed * 5) * 1.2, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
@@ -1706,7 +1744,7 @@ export class JetDriftGame {
     ctx.strokeStyle = 'rgba(174,125,255,.55)';
     ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.arc(0, 0, 20 + Math.sin(this.globalTime * 2.2) * 3, 0, TAU);
+    ctx.arc(0, 0, 20 + Math.sin(this.stageElapsed * 2.2) * 3, 0, TAU);
     ctx.stroke();
 
     if ((well.slingCharge || 0) > 35 || well.slingUsed) {
@@ -1744,7 +1782,7 @@ export class JetDriftGame {
   drawFuel(ctx, pickup) {
     if (pickup.taken || !this.isVisible(pickup.x, pickup.y, 40)) return;
     const p = this.worldToScreen(pickup.x, pickup.y);
-    const pulse = 1 + Math.sin(this.globalTime * 5 + pickup.x) * 0.08;
+    const pulse = 1 + Math.sin(this.stageElapsed * 5 + pickup.x) * 0.08;
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.scale(pulse * (p.scale || 1), pulse * (p.scale || 1) * (p.squash || 1));
@@ -1862,7 +1900,7 @@ export class JetDriftGame {
     ctx.strokeStyle = 'rgba(115,224,255,.52)';
     ctx.lineWidth = 1.4;
     for (let y = -36; y <= 36; y += 24) {
-      const shift = ((this.globalTime * 36 + y * 3) % 42) - 21;
+      const shift = ((this.stageElapsed * 36 + y * 3) % 42) - 21;
       ctx.beginPath();
       ctx.moveTo(-44 + shift, y);
       ctx.lineTo(38 + shift, y);
@@ -1959,7 +1997,7 @@ export class JetDriftGame {
     ctx.strokeStyle = 'rgba(159,151,207,.25)';
     ctx.lineWidth = 1;
     for (let i = 0; i < 3; i += 1) {
-      const a = this.globalTime * (0.12 + i * 0.04) + cloud.phase + i * 2.1;
+      const a = this.stageElapsed * (0.12 + i * 0.04) + cloud.phase + i * 2.1;
       ctx.beginPath();
       ctx.arc(Math.cos(a) * 14, Math.sin(a) * 10, cloud.range * (0.34 + i * 0.13), 0, TAU);
       ctx.stroke();

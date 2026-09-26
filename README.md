@@ -315,3 +315,25 @@ SPECIALはSECTORごとに循環。
    - 周期を見て狭い区間を抜ける
 
 最初の24ステージでは STAGE 06 / 12 / 18 / 24 がそれぞれ上記SPECIALになり、ENDLESSでは4種類を循環する。
+
+## v1.9.1 — Fair Start / Deterministic Retry / Stage 06 Course Fix
+
+### STAGE 06
+- VELOCITY ENTRYの無操作直進クリアを廃止
+- 初期の上向き高速慣性は維持
+- 無操作直進ライン中央へ専用アステロイドを追加
+- ワープ口を横へ150ずらし、実際に進路修正しないと到達できないコースへ変更
+
+### Countdown Start
+- ステージ開始直後はTIMEカウントを停止
+- スティックを有効方向へ動かす、またはJETボタンを押した瞬間にカウント開始
+- 入力待ち中は自機物理も停止
+- 入力待ち中はステージギミック時計も停止
+- VELOCITY ENTRYなど初速を持つステージでも、入力前に自機が勝手に進まない
+
+### Deterministic Retry
+- リトライ時はstageElapsedを必ず0へ戻す
+- 移動地雷と回転レーザーをglobalTime依存からstageElapsed依存へ変更
+- PHASE GATE / PULSE BEACON / MOVING WARPは既存のstageElapsed方式を維持
+- アステロイド、地雷、燃料、重力井戸、DRAG CLOUDなどギミック側の主要視覚アニメーションもstageElapsedへ統一
+- リトライ時は動的ギミックが毎回同じ位置・角度・周期位相から開始
