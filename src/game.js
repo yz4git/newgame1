@@ -208,18 +208,55 @@ function createStage(index) {
   }
 
   if (specialType === 'VELOCITY_ENTRY') {
-    startVelocity = { x: 0, y: -185 };
-    portal.x += perp.x * 150;
-    portal.y += perp.y * 150;
+    const entryDistance = distance + 330;
+    startVelocity = { x: dir.x * 310, y: dir.y * 310 };
+
+    // High-speed stages use a purpose-built layout so the extra velocity
+    // feels intentional instead of inheriting slow-stage hazard density.
+    asteroids.length = 0;
+    mines.length = 0;
+    wells.length = 0;
+    lasers.length = 0;
+    winds.length = 0;
+    repulsors.length = 0;
+    phaseGates.length = 0;
+    dragClouds.length = 0;
+    boostRings.length = 0;
+
+    portal.x = dir.x * entryDistance + perp.x * 175;
+    portal.y = dir.y * entryDistance + perp.y * 175;
+
+    // Long reaction lane: first mandatory steering decision arrives
+    // after roughly 1.7 s at the initial 310 speed.
     asteroids.push({
-      x: dir.x * distance * 0.50,
-      y: dir.y * distance * 0.50,
-      r: 38,
+      x: dir.x * entryDistance * 0.60,
+      y: dir.y * entryDistance * 0.60,
+      r: 34,
       spin: 0.32,
       phase: 0.35,
       special: true,
     });
-    time += 1.4;
+
+    // Side markers shape a readable high-speed corridor without closing
+    // the line toward the laterally offset portal.
+    asteroids.push({
+      x: dir.x * entryDistance * 0.76 - perp.x * 135,
+      y: dir.y * entryDistance * 0.76 - perp.y * 135,
+      r: 28,
+      spin: -0.24,
+      phase: 1.1,
+      special: true,
+    });
+    asteroids.push({
+      x: dir.x * entryDistance * 0.84 + perp.x * 285,
+      y: dir.y * entryDistance * 0.84 + perp.y * 285,
+      r: 30,
+      spin: 0.20,
+      phase: 2.0,
+      special: true,
+    });
+
+    time += 1.8;
   } else if (specialType === 'SLINGSHOT_ARC') {
     fuelStart = Math.min(fuelStart, 26);
     time += 2.0;
@@ -293,7 +330,7 @@ function createStage(index) {
   if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
   if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
   if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く横切るか迂回';
-  if (specialType === 'VELOCITY_ENTRY') hint = '高速侵入。中央障害物を避け、横へずれたワープ口へラインを曲げる';
+  if (specialType === 'VELOCITY_ENTRY') hint = '高速310で自動進行。長い直進区間の後、中央障害物を避けて右のワープ口へ';
   if (specialType === 'SLINGSHOT_ARC') hint = '燃料は少ない。重力井戸へ接近し、接線速度を出口へ変える';
   if (specialType === 'MOVING_WARP') hint = 'ワープ口が横移動する。到達時刻まで読んで進路を合わせる';
   if (specialType === 'LASER_CORRIDOR') hint = 'レーザーの周期を読み、狭い回廊を一気に抜ける';
@@ -1048,7 +1085,7 @@ export class JetDriftGame {
     this.currentTrail = [{ x: 0, y: 0, t: 0 }];
     this.stageElapsed = 0;
     this.trailSampleTimer = 0;
-    this.stageStarted = false;
+    this.stageStarted = Boolean(this.stage.startVelocity);
     this.pathLength = 0;
     this.lastLineRating = null;
     this.failTimer = 0;
