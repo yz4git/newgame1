@@ -1270,24 +1270,88 @@ export class JetDriftGame {
     }
   }
 
+  getWarpProjection() {
+    if (!this.wireframeWarpEnabled) return null;
+
+    if (this.clearTimer > 0) {
+      const duration = 1.26;
+      const t = clamp(1 - this.clearTimer / duration, 0, 1);
+      const mix = this.smoothWarp(clamp((t - 0.02) / 0.72, 0, 1));
+      return { active: true, mix, t, phase: 'in' };
+    }
+
+    if (this.warpOutTimer > 0) {
+      const duration = 1.02;
+      const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
+      const mix = 1 - this.smoothWarp(clamp((t - 0.06) / 0.86, 0, 1));
+      return { active: true, mix, t, phase: 'out' };
+    }
+
+    return null;
+  }
+
   worldToScreen(x, y) {
+    const cx = this.width * 0.5;
+    const cy = this.height * 0.5;
+    const dx = x - this.player.x;
+    const dy = y - this.player.y;
+    const orthoX = cx + dx;
+    const orthoY = cy + dy;
+    const projection = this.getWarpProjection();
+
+    if (!projection || projection.mix <= 0.0001) {
+      return { x: orthoX, y: orthoY, scale: 1, squash: 1, depth: 0, mix: 0 };
+    }
+
+    // The existing 2D stage plane itself becomes an X/Z plane.
+    // The route from stage origin to the goal is used as the camera-forward axis.
+    const forward = normalize(this.stage.portal.x, this.stage.portal.y, 1, 0);
+    const rightX = -forward.y;
+    const rightY = forward.x;
+    const lateral = dx * rightX + dy * rightY;
+    const along = dx * forward.x + dy * forward.y;
+
+    const minDim = Math.min(this.width, this.height);
+    const focal = minDim * 0.58;
+    const cameraDepth = minDim * 0.72;
+    const cameraHeight = minDim * 0.35;
+    const depth = Math.max(minDim * 0.18, cameraDepth + along);
+    const perspectiveScale = clamp(focal / depth, 0.10, 2.35);
+    const horizonY = this.height * 0.34;
+    const perspectiveX = cx + lateral * perspectiveScale;
+    const perspectiveY = horizonY + cameraHeight * perspectiveScale;
+
+    const mix = projection.mix;
     return {
-      x: this.width * 0.5 + (x - this.player.x),
-      y: this.height * 0.5 + (y - this.player.y),
+      x: lerp(orthoX, perspectiveX, mix),
+      y: lerp(orthoY, perspectiveY, mix),
+      scale: lerp(1, perspectiveScale, mix),
+      squash: lerp(1, 0.56, mix),
+      depth,
+      mix,
     };
+  }
+
+  screenAngleForVector(x, y, vx, vy) {
+    const a = this.worldToScreen(x, y);
+    const b = this.worldToScreen(x + vx * 24, y + vy * 24);
+    return Math.atan2(b.y - a.y, b.x - a.x);
   }
 
   isVisible(x, y, pad = 80) {
     const s = this.worldToScreen(x, y);
-    return s.x > -pad && s.x < this.width + pad && s.y > -pad && s.y < this.height + pad;
+    const extra = pad * Math.max(1, s.scale || 1);
+    return s.x > -extra && s.x < this.width + extra && s.y > -extra && s.y < this.height + extra;
   }
 
   drawStarfield(ctx) {
     ctx.fillStyle = '#02050b';
     ctx.fillRect(0, 0, this.width, this.height);
     const cell = 120;
-    const halfW = this.width * 0.5 + 120;
-    const halfH = this.height * 0.5 + 120;
+    const projection = this.getWarpProjection();
+    const spread = 1 + (projection?.mix || 0) * 1.35;
+    const halfW = (this.width * 0.5 + 120) * spread;
+    const halfH = (this.height * 0.5 + 120) * spread;
     const minCX = Math.floor((this.player.x - halfW) / cell);
     const maxCX = Math.ceil((this.player.x + halfW) / cell);
     const minCY = Math.floor((this.player.y - halfH) / cell);
@@ -1304,8 +1368,8 @@ export class JetDriftGame {
           const wy = cy * cell + ry * cell;
           const s = this.worldToScreen(wx, wy);
           const alpha = 0.28 + ((h >>> 12) & 255) / 255 * 0.55;
-          const r = ((h >>> 20) & 3) === 0 ? 1.4 : 0.75;
-          ctx.globalAlpha = alpha;
+          const r = (((h >>> 20) & 3) === 0 ? 1.4 : 0.75) * clamp(s.scale || 1, 0.22, 1.7);
+          ctx.globalAlpha = alpha * lerp(1, clamp((s.scale || 1) * 1.15, 0.30, 1), s.mix || 0);
           ctx.fillStyle = '#d8ecff';
           ctx.beginPath();
           ctx.arc(s.x, s.y, r, 0, TAU);
@@ -1328,6 +1392,7 @@ export class JetDriftGame {
     if (p.x < -r * 2 || p.x > this.width + r * 2 || p.y < -r * 2 || p.y > this.height + r * 2) return;
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     ctx.rotate(this.globalTime * 0.7);
     ctx.shadowColor = '#7fe9ff';
     ctx.shadowBlur = 22;
@@ -1340,7 +1405,7 @@ export class JetDriftGame {
       ctx.rotate(0.8);
     }
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(60,195,255,.10)';
+    ctx.fillStyle = `rgba(60,195,255,${0.10 * (1 - (p.mix || 0) * 0.82)})`;
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.7, 0, TAU);
     ctx.fill();
@@ -1352,9 +1417,13 @@ export class JetDriftGame {
     const p = this.worldToScreen(a.x, a.y);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     ctx.rotate(this.globalTime * a.spin + a.phase);
-    ctx.fillStyle = '#1b2735';
-    ctx.strokeStyle = '#52677e';
+    const warpMix = p.mix || 0;
+    ctx.fillStyle = `rgba(27,39,53,${1 - warpMix * 0.82})`;
+    ctx.strokeStyle = warpMix > 0.02
+      ? `rgba(116,220,242,${0.45 + warpMix * 0.50})`
+      : '#52677e';
     ctx.lineWidth = 2;
     ctx.beginPath();
     const points = 9;
@@ -1382,9 +1451,11 @@ export class JetDriftGame {
     const p = this.worldToScreen(m.x, m.y);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     ctx.rotate(-this.globalTime * 1.4);
-    ctx.strokeStyle = '#ff6d78';
-    ctx.fillStyle = '#29141b';
+    const warpMix = p.mix || 0;
+    ctx.strokeStyle = warpMix > 0.02 ? 'rgba(255,111,151,.94)' : '#ff6d78';
+    ctx.fillStyle = `rgba(41,20,27,${1 - warpMix * 0.76})`;
     ctx.lineWidth = 2;
     for (let i = 0; i < 8; i += 1) {
       const a = i / 8 * TAU;
@@ -1409,6 +1480,7 @@ export class JetDriftGame {
     const p = this.worldToScreen(well.x, well.y);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     const g = ctx.createRadialGradient(0, 0, 2, 0, 0, well.range);
     g.addColorStop(0, 'rgba(152,92,255,.55)');
     g.addColorStop(0.14, 'rgba(72,42,120,.32)');
@@ -1434,7 +1506,7 @@ export class JetDriftGame {
     ctx.strokeStyle = 'rgba(255,76,99,.82)';
     ctx.shadowColor = '#ff3f62';
     ctx.shadowBlur = 12;
-    ctx.lineWidth = laser.width;
+    ctx.lineWidth = laser.width * clamp(((a.scale || 1) + (b.scale || 1)) * 0.5, 0.35, 1.6);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -1442,7 +1514,7 @@ export class JetDriftGame {
     ctx.shadowBlur = 0;
     ctx.fillStyle = '#ff8595';
     ctx.beginPath();
-    ctx.arc(c.x, c.y, 8, 0, TAU);
+    ctx.arc(c.x, c.y, 8 * clamp(c.scale || 1, 0.30, 1.8), 0, TAU);
     ctx.fill();
     ctx.restore();
   }
@@ -1453,9 +1525,9 @@ export class JetDriftGame {
     const pulse = 1 + Math.sin(this.globalTime * 5 + pickup.x) * 0.08;
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.scale(pulse, pulse);
+    ctx.scale(pulse * (p.scale || 1), pulse * (p.scale || 1) * (p.squash || 1));
     ctx.strokeStyle = '#8affbd';
-    ctx.fillStyle = 'rgba(80,255,160,.16)';
+    ctx.fillStyle = `rgba(80,255,160,${0.16 * (1 - (p.mix || 0) * 0.78)})`;
     ctx.shadowColor = '#68ffad';
     ctx.shadowBlur = 12;
     ctx.lineWidth = 2;
@@ -1501,6 +1573,8 @@ export class JetDriftGame {
     const s = this.worldToScreen(ghost.x, ghost.y);
     if (s.x > -30 && s.x < this.width + 30 && s.y > -30 && s.y < this.height + 30) {
       ctx.translate(s.x, s.y);
+      ctx.scale(s.scale || 1, (s.scale || 1) * (s.squash || 1));
+      ghostAngle = this.screenAngleForVector(ghost.x, ghost.y, Math.cos(ghostAngle), Math.sin(ghostAngle));
       ctx.rotate(ghostAngle);
       ctx.fillStyle = 'rgba(190,247,255,.35)';
       ctx.shadowColor = '#82e9ff';
@@ -1526,6 +1600,7 @@ export class JetDriftGame {
     const p = this.worldToScreen(wind.x, wind.y);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     const g = ctx.createRadialGradient(0, 0, 4, 0, 0, wind.range);
     g.addColorStop(0, 'rgba(55,192,255,.18)');
     g.addColorStop(1, 'rgba(55,192,255,0)');
@@ -1533,7 +1608,7 @@ export class JetDriftGame {
     ctx.beginPath();
     ctx.arc(0, 0, wind.range, 0, TAU);
     ctx.fill();
-    ctx.rotate(Math.atan2(wind.dy, wind.dx));
+    ctx.rotate(this.screenAngleForVector(wind.x, wind.y, wind.dx, wind.dy));
     ctx.strokeStyle = 'rgba(115,224,255,.52)';
     ctx.lineWidth = 1.4;
     for (let y = -36; y <= 36; y += 24) {
@@ -1555,6 +1630,7 @@ export class JetDriftGame {
     const pulse = this.repulsorPulse(repulsor);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     ctx.fillStyle = 'rgba(255,126,183,.14)';
     ctx.strokeStyle = 'rgba(255,119,176,.76)';
     ctx.lineWidth = 2;
@@ -1581,7 +1657,7 @@ export class JetDriftGame {
     ctx.strokeStyle = active ? 'rgba(255,82,118,.88)' : 'rgba(104,220,255,.24)';
     ctx.shadowColor = active ? '#ff4269' : '#6fe8ff';
     ctx.shadowBlur = active ? 14 : 5;
-    ctx.lineWidth = active ? gate.width : 2;
+    ctx.lineWidth = (active ? gate.width : 2) * clamp(((a.scale || 1) + (b.scale || 1)) * 0.5, 0.35, 1.6);
     if (!active) ctx.setLineDash([8, 8]);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
@@ -1597,7 +1673,8 @@ export class JetDriftGame {
     const p = this.worldToScreen(ring.x, ring.y);
     ctx.save();
     ctx.translate(p.x, p.y);
-    ctx.rotate(Math.atan2(ring.dy, ring.dx));
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
+    ctx.rotate(this.screenAngleForVector(ring.x, ring.y, ring.dx, ring.dy));
     ctx.globalAlpha = ring.used ? 0.22 : 1;
     ctx.strokeStyle = '#76ffad';
     ctx.shadowColor = '#65ffac';
@@ -1620,6 +1697,7 @@ export class JetDriftGame {
     const p = this.worldToScreen(cloud.x, cloud.y);
     ctx.save();
     ctx.translate(p.x, p.y);
+    ctx.scale(p.scale || 1, (p.scale || 1) * (p.squash || 1));
     const g = ctx.createRadialGradient(0, 0, 5, 0, 0, cloud.range);
     g.addColorStop(0, 'rgba(126,119,170,.24)');
     g.addColorStop(0.65, 'rgba(73,72,112,.17)');
@@ -1642,7 +1720,8 @@ export class JetDriftGame {
   drawLineRating(ctx) {
     if (!this.lastLineRating || this.clearTimer <= 0) return;
     const r = this.lastLineRating;
-    const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+    const duration = this.wireframeWarpEnabled ? 1.26 : 1.0;
+    const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const alpha = clamp(Math.min(t * 5, (1 - t) * 6 + 0.25), 0, 1);
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1660,12 +1739,34 @@ export class JetDriftGame {
   }
 
   drawPlayer(ctx) {
-    const cx = this.width * 0.5;
-    const cy = this.height * 0.5;
     const p = this.player;
-    const nozzleAngle = Math.atan2(this.aimY, this.aimX);
+    const projected = this.worldToScreen(p.x, p.y);
+    let cx = projected.x;
+    let cy = projected.y;
+    let shipScale = clamp(projected.scale || 1, 0.20, 2.0);
+    let cinematicRotation = 0;
+    const warpProjection = this.getWarpProjection();
+
+    if (warpProjection?.phase === 'in') {
+      const travel = this.smoothWarp(clamp((warpProjection.t - 0.40) / 0.56, 0, 1));
+      cx = lerp(cx, this.width * 0.5, travel * 0.34);
+      cy = lerp(cy, this.height * 0.34, travel);
+      shipScale *= 1 - travel * 0.86;
+      cinematicRotation = travel * TAU * 1.85;
+    } else if (warpProjection?.phase === 'out') {
+      const emerge = this.smoothWarp(clamp(warpProjection.t / 0.48, 0, 1));
+      cx = lerp(this.width * 0.5, cx, emerge);
+      cy = lerp(this.height * 0.34, cy, emerge);
+      shipScale *= 0.12 + emerge * 0.88;
+      cinematicRotation = (1 - emerge) * TAU * 1.45;
+    }
+
+    const nozzleAngle = this.screenAngleForVector(p.x, p.y, this.aimX, this.aimY);
+    const shipAngle = this.screenAngleForVector(p.x, p.y, Math.cos(p.angle), Math.sin(p.angle));
     ctx.save();
     ctx.translate(cx, cy);
+    ctx.rotate(cinematicRotation);
+    ctx.scale(shipScale, shipScale);
 
     if (this.thrusting && this.fuel > 0 && this.failTimer <= 0) {
       ctx.save();
@@ -1686,7 +1787,7 @@ export class JetDriftGame {
     }
 
     ctx.save();
-    ctx.rotate(p.angle);
+    ctx.rotate(shipAngle);
     ctx.fillStyle = '#dfe9f1';
     ctx.strokeStyle = '#6f91ad';
     ctx.lineWidth = 2;
@@ -1762,11 +1863,13 @@ export class JetDriftGame {
     if (speed > 10) {
       const dx = p.vx / speed;
       const dy = p.vy / speed;
+      const trailAngle = this.screenAngleForVector(p.x, p.y, dx, dy);
+      const trailLen = clamp(speed * 0.18, 20, 70);
       ctx.strokeStyle = 'rgba(118,213,255,.45)';
       ctx.setLineDash([4, 5]);
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(dx * clamp(speed * 0.18, 20, 70), dy * clamp(speed * 0.18, 20, 70));
+      ctx.lineTo(Math.cos(trailAngle) * trailLen, Math.sin(trailAngle) * trailLen);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -1886,7 +1989,46 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawProjectedWorldGrid(ctx) {
+    const projection = this.getWarpProjection();
+    if (!projection || projection.mix <= 0.02) return;
+
+    const forward = normalize(this.stage.portal.x, this.stage.portal.y, 1, 0);
+    const right = { x: -forward.y, y: forward.x };
+    const alpha = 0.04 + projection.mix * 0.22;
+    const centerX = this.player.x;
+    const centerY = this.player.y;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(92,211,242,${alpha})`;
+    ctx.lineWidth = 1;
+
+    for (let i = -5; i <= 5; i += 1) {
+      const lx = right.x * i * 90;
+      const ly = right.y * i * 90;
+      const a = this.worldToScreen(centerX + lx - forward.x * 260, centerY + ly - forward.y * 260);
+      const b = this.worldToScreen(centerX + lx + forward.x * 900, centerY + ly + forward.y * 900);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    for (let i = -3; i <= 10; i += 1) {
+      const fx = forward.x * i * 90;
+      const fy = forward.y * i * 90;
+      const a = this.worldToScreen(centerX + fx - right.x * 520, centerY + fy - right.y * 520);
+      const b = this.worldToScreen(centerX + fx + right.x * 520, centerY + fy + right.y * 520);
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   drawWorld(ctx) {
+    this.drawProjectedWorldGrid(ctx);
     for (const cloud of this.stage.dragClouds) this.drawDragCloud(ctx, cloud);
     for (const wind of this.stage.winds) this.drawWind(ctx, wind);
     this.drawGhostTrail(ctx);
@@ -1946,212 +2088,26 @@ export class JetDriftGame {
     return t * t * (3 - 2 * t);
   }
 
-  drawWireframeShip(ctx, x, y, scale, rotation, alpha = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    ctx.scale(scale, scale);
-    ctx.globalAlpha *= alpha;
-    ctx.strokeStyle = 'rgba(191,248,255,.95)';
-    ctx.shadowColor = '#65e4ff';
-    ctx.shadowBlur = 12;
-    ctx.lineWidth = 1.5;
-
-    ctx.beginPath();
-    ctx.moveTo(19, 0);
-    ctx.lineTo(-8, -10);
-    ctx.lineTo(-3, 0);
-    ctx.lineTo(-8, 10);
-    ctx.closePath();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(8, 0);
-    ctx.lineTo(-12, -18);
-    ctx.lineTo(-5, -4);
-    ctx.moveTo(8, 0);
-    ctx.lineTo(-12, 18);
-    ctx.lineTo(-5, 4);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(-8, -10);
-    ctx.lineTo(-12, -18);
-    ctx.moveTo(-8, 10);
-    ctx.lineTo(-12, 18);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(205,251,255,.72)';
-    ctx.beginPath();
-    ctx.arc(3, 0, 2.2, 0, TAU);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  }
-
-  drawWireframeWarpScene(ctx, progress, outgoing = false) {
+  drawProjectedWarpFlash(ctx, progress, outgoing = false) {
     const t = clamp(progress, 0, 1);
-    const ease = this.smoothWarp(t);
-    const dim = outgoing
-      ? 1 - this.smoothWarp(clamp((t - 0.28) / 0.72, 0, 1))
-      : this.smoothWarp(clamp((t - 0.04) / 0.54, 0, 1));
-    const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
-    const screenX = this.width * 0.5;
-    const screenY = this.height * 0.5;
-    const vanishX = outgoing
-      ? screenX
-      : lerp(portal.x, screenX, this.smoothWarp(clamp(t / 0.48, 0, 1)));
-    const vanishY = outgoing
-      ? screenY
-      : lerp(portal.y, screenY, this.smoothWarp(clamp(t / 0.48, 0, 1)));
-    const diag = Math.hypot(this.width, this.height);
-    const minDim = Math.min(this.width, this.height);
-    const roll = (outgoing ? (1 - ease) : ease) * 0.26;
+    const projection = this.getWarpProjection();
+    const mix = projection?.mix || 0;
 
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-
-    if (dim > 0.01) {
-      ctx.fillStyle = `rgba(1,6,12,${dim * 0.62})`;
-      ctx.fillRect(0, 0, this.width, this.height);
-    }
-
-    // The flat 2D frame becomes a perspective floor/grid before the tunnel dominates.
-    const gridMix = outgoing
-      ? clamp((1 - t) / 0.72, 0, 1)
-      : clamp(t / 0.48, 0, 1);
-    if (gridMix > 0.01) {
-      const horizonY = lerp(this.height * 0.5, this.height * 0.36, dim);
-      ctx.strokeStyle = `rgba(95,220,255,${0.10 + gridMix * 0.27})`;
-      ctx.lineWidth = 1;
-      for (let i = -5; i <= 5; i += 1) {
-        const nearX = this.width * 0.5 + i * this.width * 0.13;
-        ctx.beginPath();
-        ctx.moveTo(vanishX, horizonY);
-        ctx.lineTo(nearX, this.height * 1.08);
-        ctx.stroke();
-      }
-      for (let i = 1; i <= 7; i += 1) {
-        const q = i / 7;
-        const y = lerp(horizonY, this.height * 1.04, q * q);
-        const half = this.width * 0.58 * q;
-        ctx.beginPath();
-        ctx.moveTo(screenX - half, y);
-        ctx.lineTo(screenX + half, y);
-        ctx.stroke();
-      }
-
-      // Border lines tie the existing 2D screen edges to the 3D vanishing point.
-      ctx.strokeStyle = `rgba(188,244,255,${gridMix * 0.18})`;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(vanishX, vanishY);
-      ctx.lineTo(this.width, 0);
-      ctx.moveTo(0, this.height);
-      ctx.lineTo(vanishX, vanishY);
-      ctx.lineTo(this.width, this.height);
-      ctx.stroke();
-    }
-
-    ctx.translate(vanishX, vanishY);
-    ctx.rotate(roll);
-
-    const ringCount = 13;
-    const sides = 12;
-    const centers = [];
-    const radii = [];
-    const squashes = [];
-    const travel = outgoing ? (1 - ease) * 1.65 : ease * 1.65;
-
-    for (let i = 0; i < ringCount; i += 1) {
-      let z = (i / ringCount + travel) % 1;
-      if (z < 0) z += 1;
-      const near = 1 - z;
-      const depthCurve = near * near;
-      const radius = 10 + depthCurve * diag * 0.67;
-      const squash = lerp(1, 0.50, dim);
-      const cy = (z - 0.50) * dim * minDim * 0.24;
-      centers.push(cy);
-      radii.push(radius);
-      squashes.push(squash);
-
-      const alpha = clamp(0.10 + near * 0.70, 0, 0.78) * (0.22 + dim * 0.78);
-      ctx.strokeStyle = `rgba(118,228,255,${alpha})`;
-      ctx.lineWidth = 0.7 + near * 1.4;
-      ctx.beginPath();
-      for (let j = 0; j <= sides; j += 1) {
-        const a = (j % sides) / sides * TAU + z * 1.15 + this.globalTime * 0.12;
-        const x = Math.cos(a) * radius;
-        const y = cy + Math.sin(a) * radius * squash;
-        if (j === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-
-    // Longitudinal rails turn the rings into a true wireframe tunnel.
-    ctx.strokeStyle = `rgba(103,214,255,${0.14 + dim * 0.36})`;
-    ctx.lineWidth = 1;
-    for (let j = 0; j < sides; j += 2) {
-      ctx.beginPath();
-      for (let i = 0; i < ringCount; i += 1) {
-        const z = i / Math.max(1, ringCount - 1);
-        const a = j / sides * TAU + z * 1.15 + this.globalTime * 0.12;
-        const x = Math.cos(a) * radii[i];
-        const y = centers[i] + Math.sin(a) * radii[i] * squashes[i];
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-
-    // Fast depth streaks amplify forward camera motion.
-    const streakAlpha = (0.10 + dim * 0.42) * (outgoing ? (1 - t * 0.35) : 1);
-    ctx.strokeStyle = `rgba(220,250,255,${streakAlpha})`;
-    for (let i = 0; i < 34; i += 1) {
-      const a = ((i * 137.508) % 360) * Math.PI / 180;
-      const seed = ((i * 47) % 101) / 101;
-      const inner = 18 + seed * minDim * 0.20;
-      const len = (34 + seed * 150) * (0.35 + dim * 0.95);
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner * lerp(1, 0.62, dim));
-      ctx.lineTo(Math.cos(a) * (inner + len), Math.sin(a) * (inner + len) * lerp(1, 0.62, dim));
-      ctx.stroke();
-    }
-
-    ctx.restore();
-
-    // Ship changes from the flat game sprite into a 3D-looking wireframe object.
-    if (!outgoing) {
-      const shipStart = this.smoothWarp(clamp((t - 0.14) / 0.76, 0, 1));
-      const sx = lerp(this.width * 0.5, vanishX, shipStart * 0.62);
-      const sy = lerp(this.height * 0.5, vanishY, shipStart * 0.62);
-      const scale = 1 - shipStart * 0.88;
-      const alpha = clamp((t - 0.12) * 5, 0, 1) * clamp((1 - t) * 5, 0, 1);
-      this.drawWireframeShip(ctx, sx, sy, scale, shipStart * TAU * 2.25, alpha);
-    } else {
-      const emerge = this.smoothWarp(clamp((t - 0.05) / 0.82, 0, 1));
-      const scale = 0.10 + emerge * 0.90;
-      const alpha = clamp(t * 4, 0, 1) * clamp((1 - t) * 5 + 0.2, 0, 1);
-      this.drawWireframeShip(
-        ctx,
-        this.width * 0.5,
-        this.height * 0.5,
-        scale,
-        (1 - emerge) * TAU * 1.8,
-        alpha,
-      );
-    }
-
-    const flash = outgoing
-      ? clamp((0.18 - t) / 0.18, 0, 1)
-      : clamp((t - 0.86) / 0.14, 0, 1);
-    if (flash > 0) {
+    if (mix > 0.02) {
       ctx.save();
-      ctx.fillStyle = `rgba(232,250,255,${flash * 0.78})`;
+      ctx.fillStyle = `rgba(0,5,11,${mix * 0.10})`;
       ctx.fillRect(0, 0, this.width, this.height);
       ctx.restore();
     }
+
+    const flash = outgoing
+      ? clamp((0.13 - t) / 0.13, 0, 1)
+      : clamp((t - 0.88) / 0.12, 0, 1);
+    if (flash <= 0) return;
+    ctx.save();
+    ctx.fillStyle = `rgba(232,250,255,${flash * 0.76})`;
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.restore();
   }
 
   drawWarpEffect(ctx) {
@@ -2159,7 +2115,7 @@ export class JetDriftGame {
     if (this.wireframeWarpEnabled) {
       const duration = 1.26;
       const t = clamp(1 - this.clearTimer / duration, 0, 1);
-      this.drawWireframeWarpScene(ctx, t, false);
+      this.drawProjectedWarpFlash(ctx, t, false);
       return;
     }
     const duration = 1.0;
@@ -2228,7 +2184,7 @@ export class JetDriftGame {
     if (this.wireframeWarpEnabled) {
       const duration = 1.02;
       const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
-      this.drawWireframeWarpScene(ctx, t, true);
+      this.drawProjectedWarpFlash(ctx, t, true);
       return;
     }
     const duration = 0.72;
@@ -2390,52 +2346,43 @@ export class JetDriftGame {
     this.drawWorld(ctx);
 
     if (this.failTimer <= 0) {
-      if (this.clearTimer > 0) {
-        const duration = this.wireframeWarpEnabled ? 1.26 : 1.0;
-        const t = clamp(1 - this.clearTimer / duration, 0, 1);
-        if (!this.wireframeWarpEnabled || t < 0.34) {
-          const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
-          const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
-          const startX = this.width * 0.5;
-          const startY = this.height * 0.5;
-          const shipX = lerp(startX, portal.x, suction);
-          const shipY = lerp(startY, portal.y, suction);
-          const shrink = 1 - clamp((t - 0.12) / 0.76, 0, 1) * 0.86;
-          ctx.save();
-          ctx.globalAlpha = this.wireframeWarpEnabled
-            ? clamp(1 - t / 0.36, 0, 1)
-            : clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
-          ctx.translate(shipX, shipY);
-          ctx.rotate((t * t) * TAU * 2.35);
-          ctx.scale(shrink, shrink);
-          ctx.translate(-startX, -startY);
-          this.drawPlayer(ctx);
-          ctx.restore();
-        }
+      if (this.wireframeWarpEnabled) {
+        this.drawPlayer(ctx);
+      } else if (this.clearTimer > 0) {
+        const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+        const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
+        const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+        const startX = this.width * 0.5;
+        const startY = this.height * 0.5;
+        const shipX = lerp(startX, portal.x, suction);
+        const shipY = lerp(startY, portal.y, suction);
+        const shrink = 1 - clamp((t - 0.12) / 0.76, 0, 1) * 0.86;
+        ctx.save();
+        ctx.globalAlpha = clamp(1 - Math.max(0, t - 0.72) / 0.28, 0, 1);
+        ctx.translate(shipX, shipY);
+        ctx.rotate((t * t) * TAU * 2.35);
+        ctx.scale(shrink, shrink);
+        ctx.translate(-startX, -startY);
+        this.drawPlayer(ctx);
+        ctx.restore();
       } else if (this.warpOutTimer > 0) {
-        const duration = this.wireframeWarpEnabled ? 1.02 : 0.72;
-        const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
-        if (!this.wireframeWarpEnabled || t > 0.68) {
-          const emerge = this.wireframeWarpEnabled
-            ? this.smoothWarp(clamp((t - 0.68) / 0.32, 0, 1))
-            : 1 - Math.pow(1 - t, 3);
-          const cx = this.width * 0.5;
-          const cy = this.height * 0.5;
-          const scale = this.wireframeWarpEnabled ? (0.82 + emerge * 0.18) : (0.10 + emerge * 0.90);
-          ctx.save();
-          ctx.globalAlpha = this.wireframeWarpEnabled ? emerge : clamp(t * 2.2, 0, 1);
-          ctx.translate(cx, cy);
-          ctx.rotate(this.wireframeWarpEnabled ? (1 - emerge) * 0.22 : (1 - emerge) * TAU * 2.1);
-          ctx.scale(scale, scale);
-          ctx.translate(-cx, -cy);
-          this.drawPlayer(ctx);
-          ctx.restore();
-        }
+        const t = clamp(1 - this.warpOutTimer / 0.72, 0, 1);
+        const emerge = 1 - Math.pow(1 - t, 3);
+        const cx = this.width * 0.5;
+        const cy = this.height * 0.5;
+        const scale = 0.10 + emerge * 0.90;
+        ctx.save();
+        ctx.globalAlpha = clamp(t * 2.2, 0, 1);
+        ctx.translate(cx, cy);
+        ctx.rotate((1 - emerge) * TAU * 2.1);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+        this.drawPlayer(ctx);
+        ctx.restore();
       } else {
         this.drawPlayer(ctx);
       }
     }
-
     if (this.clearTimer <= 0 && this.warpOutTimer <= 0) {
       this.drawDirectionCue(ctx);
       this.drawMinimap(ctx);
