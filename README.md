@@ -374,3 +374,48 @@ SPECIALはSECTORごとに循環。
 - 全SPECIALで薄い専用フレームを表示
 - HUDステージカードと右上STAGEバッジもSPECIAL種別に応じて色を変更
 - 演出はゲーム判定や操作を妨げず、追加ボタンなし
+
+## v1.11.0 — Progressive Manual / High-Speed Slalom
+
+### Manual
+- タイトル画面とPAUSE画面からMANUALを開ける
+- 操作方法と発見済みギミックの説明を一覧表示
+- PAUSEから開いた場合は現在STAGEまでに登場した項目だけ表示
+- タイトルから開いた場合は保存済みFURTHEST STAGEまでに登場した項目だけ表示
+- 未到達のギミック名・説明は一切表示しない
+- 初登場STAGE番号、HAZARD / FIELD / ITEM / SPECIAL区分を表示
+- Escape/PでもMANUALから元画面へ戻れる
+
+解放順:
+STAGE 01 WARP PORTAL
+STAGE 03 ASTEROID
+STAGE 04 FUEL CELL
+STAGE 06 VELOCITY ENTRY
+STAGE 07 MOVING MINE / SOLAR WIND
+STAGE 09 GRAVITY WELL
+STAGE 10 PULSE BEACON
+STAGE 12 SLINGSHOT ARC
+STAGE 13 ROTATING LASER
+STAGE 14 PHASE GATE
+STAGE 17 BOOST RING
+STAGE 18 MOVING WARP
+STAGE 21 DRAG CLOUD
+STAGE 24 LASER CORRIDOR
+
+### VELOCITY ENTRY slalom redesign
+- 初速310と未入力自動進行は維持
+- コース全長をさらに延長して最初のスラロームゲートまで長い直進猶予を確保
+- 3つのアステロイドゲートを追加
+- 安全ギャップを右 → 左 → 右と交互配置
+- 最終ワープ口は反対側へ配置し、最後にもう一度切り返す
+- 想定ラインは直進 → 右 → 左 → 右 → 出口側で、約3回の方向転換が必要
+- 高速ライン上に小型FUELをガイドとして配置
+- 高速専用配置のため通常ランダム危険物は引き続き除外
+
+
+### v1.11.0 high-speed slalom final tuning
+- STAGE 06は初速310を維持したままコース長を約2200へ延長
+- 最初の必須ゲートまで約3.1秒の直進猶予
+- ゲートは約44% / 62% / 80%地点
+- 安全ギャップは右 → 左 → 右、最終WARPは左側
+- 3回の切り返しが速度310でも成立する間隔へ調整

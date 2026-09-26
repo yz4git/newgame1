@@ -31,6 +31,15 @@ const soundButton = $('soundButton');
 const pauseButton = $('pauseButton');
 const bestReadout = $('bestReadout');
 const warpModeButton = $('warpModeButton');
+const manualScreen = $('manualScreen');
+const manualProgress = $('manualProgress');
+const manualCount = $('manualCount');
+const manualGimmickList = $('manualGimmickList');
+const manualEmpty = $('manualEmpty');
+const manualCloseButton = $('manualCloseButton');
+const manualBackButton = $('manualBackButton');
+const titleManualButton = $('titleManualButton');
+const pauseManualButton = $('pauseManualButton');
 
 let toastTimer = 0;
 let specialOverlayTimer = 0;
@@ -38,6 +47,7 @@ let soundEnabled = true;
 let stickPointer = null;
 let jetPointer = null;
 let keyboardAim = { x: 0, y: 0 };
+let manualSource = 'title';
 
 function preventGesture(event) {
   if (event.cancelable) event.preventDefault();
@@ -52,7 +62,9 @@ document.addEventListener('touchstart', (event) => {
 }, { passive: false });
 
 document.addEventListener('touchmove', (event) => {
-  if (event.target instanceof Element && event.target.closest('#app') && event.cancelable) event.preventDefault();
+  if (!(event.target instanceof Element)) return;
+  if (event.target.closest('#manualScreen')) return;
+  if (event.target.closest('#app') && event.cancelable) event.preventDefault();
 }, { passive: false });
 
 let lastTouchEnd = 0;
@@ -76,6 +88,84 @@ window.visualViewport?.addEventListener('resize', () => {
   keepViewportPinned();
   game.resize();
 }, { passive: true });
+
+
+const MANUAL_GIMMICKS = [
+  { firstStage: 1, type: 'warp', name: 'WARP PORTAL', tag: 'GOAL', desc: 'シアンのリングが出口。機体がリングへ触れればステージクリア。高速で進入してもよい。' },
+  { firstStage: 3, type: 'asteroid', name: 'ASTEROID', tag: 'HAZARD', desc: '固定障害物。接触すると爆発。慣性が強いほど早めの進路変更が必要。' },
+  { firstStage: 4, type: 'fuel', name: 'FUEL CELL', tag: 'ITEM', desc: '緑の＋マーク。触れるとJET FUELを回復する。無理に取るよりライン維持が有利な場合もある。' },
+  { firstStage: 6, type: 'velocity', name: 'VELOCITY ENTRY', tag: 'SPECIAL', desc: '初速付き高速SPECIAL。未入力でも自動進行しTIMEも開始する。長い直進区間のあと高速スラロームへ入る。' },
+  { firstStage: 7, type: 'mine', name: 'MOVING MINE', tag: 'HAZARD', desc: '一定軸上を往復する地雷。リトライ時は同じ位置・同じ位相から動き始める。' },
+  { firstStage: 7, type: 'wind', name: 'SOLAR WIND', tag: 'FIELD', desc: '青い流れの範囲内では一定方向へ加速される。JETを節約する無料の推進力として使える。' },
+  { firstStage: 9, type: 'gravity', name: 'GRAVITY WELL', tag: 'FIELD', desc: '紫の重力井戸。近いほど強く引かれる。接線速度を作って外へ抜けるとスリングショット加速を狙える。' },
+  { firstStage: 10, type: 'pulse', name: 'PULSE BEACON', tag: 'HAZARD', desc: '周期的に衝撃波を放つ。発光リングの周期を読み、波が弱い瞬間か安全な距離を通過する。' },
+  { firstStage: 12, type: 'slingshot', name: 'SLINGSHOT ARC', tag: 'SPECIAL', desc: '燃料が少ないSPECIAL。重力井戸へ接近し、接線方向の速度を作って重力加速で出口を目指す。' },
+  { firstStage: 13, type: 'laser', name: 'ROTATING LASER', tag: 'HAZARD', desc: '中心を軸に回転するレーザー。線へ触れると即FAIL。角度と回転周期を先読みする。' },
+  { firstStage: 14, type: 'phase', name: 'PHASE GATE', tag: 'HAZARD', desc: '周期的に実体化するゲート。消えている時間帯を抜けるか、端を迂回する。' },
+  { firstStage: 17, type: 'boost', name: 'BOOST RING', tag: 'FIELD', desc: '緑のリング。通過するとリング方向へ追加加速。JETを使わず速度を伸ばせる。' },
+  { firstStage: 18, type: 'movingWarp', name: 'MOVING WARP', tag: 'SPECIAL', desc: '出口ワープが横方向へ周期移動するSPECIAL。現在位置ではなく到達時刻の位置を狙う。' },
+  { firstStage: 21, type: 'drag', name: 'DRAG CLOUD', tag: 'FIELD', desc: '紫灰色の雲。内部では速度が落ちる。短く横切るか外周を回って慣性を守る。' },
+  { firstStage: 24, type: 'corridor', name: 'LASER CORRIDOR', tag: 'SPECIAL', desc: '複数レーザーが作る高速回廊。安全角度が連続するタイミングを見つけ、一気に抜ける。' },
+];
+
+function manualStageLimit(source) {
+  if (source === 'pause' && game.state === 'playing') return game.getSnapshot().stageIndex + 1;
+  const progress = game.getRecords().furthest || 1;
+  return Math.max(1, progress);
+}
+
+function renderManual(maxStage) {
+  manualProgress.textContent = 'STAGE ' + String(maxStage).padStart(maxStage >= 100 ? 3 : 2, '0') + ' までに確認した情報';
+  const visible = MANUAL_GIMMICKS.filter((item) => item.firstStage <= maxStage);
+  manualCount.textContent = visible.length + ' ENTRIES';
+  manualGimmickList.replaceChildren();
+  manualEmpty.hidden = visible.length > 0;
+
+  for (const item of visible) {
+    const card = document.createElement('article');
+    card.className = 'manual-gimmick-card';
+    card.dataset.type = item.type;
+
+    const icon = document.createElement('div');
+    icon.className = 'manual-gimmick-icon';
+    icon.textContent = item.tag === 'SPECIAL' ? '◆' : item.name.slice(0, 1);
+
+    const body = document.createElement('div');
+    const meta = document.createElement('div');
+    meta.className = 'manual-gimmick-meta';
+    const stage = document.createElement('span');
+    stage.textContent = 'STAGE ' + String(item.firstStage).padStart(2, '0');
+    const tag = document.createElement('b');
+    tag.textContent = item.tag;
+    meta.append(stage, tag);
+
+    const name = document.createElement('h3');
+    name.textContent = item.name;
+    const desc = document.createElement('p');
+    desc.textContent = item.desc;
+    body.append(meta, name, desc);
+    card.append(icon, body);
+    manualGimmickList.append(card);
+  }
+}
+
+function openManual(source) {
+  manualSource = source;
+  const maxStage = manualStageLimit(source);
+  renderManual(maxStage);
+  manualScreen.hidden = false;
+  if (source === 'title') titleScreen.hidden = true;
+  if (source === 'pause') pauseScreen.hidden = true;
+}
+
+function closeManual() {
+  manualScreen.hidden = true;
+  if (manualSource === 'pause' && game.state === 'playing') {
+    pauseScreen.hidden = false;
+  } else {
+    titleScreen.hidden = false;
+  }
+}
 
 const SPECIAL_LABELS = {
   VELOCITY_ENTRY: ['VELOCITY ENTRY', 'HIGH VELOCITY CHALLENGE'],
@@ -175,6 +265,7 @@ function setState(state, detail = {}) {
     return;
   }
   if (state === 'title') {
+    manualScreen.hidden = true;
     specialStageOverlay.hidden = true;
     specialStageOverlay.classList.remove('show');
     hud.hidden = true;
@@ -301,6 +392,10 @@ jetButton.addEventListener('pointerup', endJet);
 jetButton.addEventListener('pointercancel', endJet);
 
 $('startButton').addEventListener('click', () => game.start());
+titleManualButton.addEventListener('click', () => openManual('title'));
+pauseManualButton.addEventListener('click', () => openManual('pause'));
+manualCloseButton.addEventListener('click', closeManual);
+manualBackButton.addEventListener('click', closeManual);
 $('resumeButton').addEventListener('click', () => game.setPaused(false));
 $('restartButton').addEventListener('click', () => game.startAgain());
 $('titleButton').addEventListener('click', () => game.returnToTitle());
@@ -341,7 +436,8 @@ window.addEventListener('keydown', (event) => {
     event.preventDefault();
   }
   if (event.code === 'Escape' || event.code === 'KeyP') {
-    if (!pauseScreen.hidden) game.setPaused(false);
+    if (!manualScreen.hidden) closeManual();
+    else if (!pauseScreen.hidden) game.setPaused(false);
     else if (game.state === 'playing') game.setPaused(true);
     event.preventDefault();
   }

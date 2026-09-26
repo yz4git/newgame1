@@ -70,6 +70,7 @@
         <p class="title-jp">噴射して、流して、ワープへ飛び込む。</p>
         <p class="title-desc">左スティックで噴射口の向きを決める。JETを押すとその反対方向へ加速。<br />プレイヤーは画面中心、宇宙がスクロール。燃料と慣性を読み、数秒でワープ口へ到達しよう。</p>
         <button id="startButton" class="primary-button" type="button"><span>JET RUNを開始</span><i aria-hidden="true">▶</i></button>
+        <button id="titleManualButton" class="manual-link-button" type="button">MANUAL / ギミック説明</button>
         <div class="control-summary">
           <span><b>STICK</b> 噴射口を向ける</span>
           <span><b>JET</b> 押している間だけ噴射</span>
@@ -94,8 +95,32 @@
           </button>
           <small>OFFにすると従来の2Dワープ演出へ即時復帰します。</small>
         </div>
+        <button id="pauseManualButton" class="text-button manual-open-button" type="button">MANUAL / ギミック説明</button>
         <button id="restartButton" class="text-button" type="button">STAGE 01からやり直す</button>
         <button id="titleButton" class="text-button" type="button">タイトルへ</button>
+      </div>
+    </section>
+
+    <section id="manualScreen" class="screen manual-screen" hidden>
+      <div class="manual-panel">
+        <header class="manual-header">
+          <div>
+            <span class="eyebrow">FLIGHT DATABASE</span>
+            <h2>MANUAL</h2>
+            <p id="manualProgress">STAGE 01までの情報</p>
+          </div>
+          <button id="manualCloseButton" class="manual-close-button" type="button" aria-label="マニュアルを閉じる">×</button>
+        </header>
+        <div class="manual-basics">
+          <article><b>STICK</b><span>噴射口を向ける。機体は噴射口と反対方向へ加速。</span></article>
+          <article><b>JET</b><span>押している間だけ燃料を消費して加速。慣性は離しても残る。</span></article>
+          <article><b>WARP</b><span>ワープ口へ入ればクリア。通常面は最初の操作からTIME開始。</span></article>
+          <article><b>RETRY</b><span>動くギミックはリトライしても毎回同じ初期位相から始まる。</span></article>
+        </div>
+        <div class="manual-section-title"><span>DISCOVERED GIMMICKS</span><small id="manualCount"></small></div>
+        <div id="manualGimmickList" class="manual-gimmick-list"></div>
+        <div id="manualEmpty" class="manual-empty" hidden>まだ追加ギミックは発見されていません。</div>
+        <button id="manualBackButton" class="primary-button manual-back-button" type="button"><span>戻る</span><i aria-hidden="true">↩</i></button>
       </div>
     </section>
   </main>
