@@ -2687,6 +2687,86 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawSpecialStageAtmosphere(ctx) {
+    const type = this.stage?.specialType;
+    if (!type || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0 || this.state !== 'playing') return;
+
+    const t = this.stageElapsed;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 5.2);
+    const w = this.width;
+    const h = this.height;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    if (type === 'VELOCITY_ENTRY') {
+      const speed = Math.hypot(this.player.vx, this.player.vy);
+      const strength = clamp((speed - 180) / 180, 0.25, 1);
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const diag = Math.hypot(w, h);
+      ctx.strokeStyle = `rgba(116,226,255,${0.10 + strength * 0.22})`;
+      ctx.lineWidth = 1 + strength * 1.2;
+      for (let i = 0; i < 30; i += 1) {
+        const a = ((i * 137.508) % 360) * Math.PI / 180;
+        const seed = ((i * 43) % 101) / 101;
+        const phase = (t * (0.8 + seed * 0.7) + seed) % 1;
+        const r1 = 50 + phase * diag * 0.44;
+        const len = 18 + strength * (45 + seed * 85);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+        ctx.lineTo(cx + Math.cos(a) * (r1 + len), cy + Math.sin(a) * (r1 + len));
+        ctx.stroke();
+      }
+    } else if (type === 'SLINGSHOT_ARC') {
+      ctx.strokeStyle = `rgba(179,122,255,${0.11 + pulse * 0.09})`;
+      ctx.lineWidth = 1.4;
+      const cx = w * 0.5;
+      const cy = h * 0.54;
+      for (let i = 0; i < 4; i += 1) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, 72 + i * 56 + pulse * 6, -0.92, 0.92);
+        ctx.stroke();
+      }
+    } else if (type === 'MOVING_WARP') {
+      ctx.strokeStyle = `rgba(92,229,255,${0.08 + pulse * 0.06})`;
+      ctx.lineWidth = 1;
+      const shift = (t * 80) % 36;
+      for (let y = -36 + shift; y < h + 36; y += 36) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    } else if (type === 'LASER_CORRIDOR') {
+      const alpha = 0.10 + pulse * 0.08;
+      const edge = Math.min(44, w * 0.07);
+      const left = ctx.createLinearGradient(0, 0, edge, 0);
+      left.addColorStop(0, `rgba(255,48,81,${alpha})`);
+      left.addColorStop(1, 'rgba(255,48,81,0)');
+      ctx.fillStyle = left;
+      ctx.fillRect(0, 0, edge, h);
+      const right = ctx.createLinearGradient(w, 0, w - edge, 0);
+      right.addColorStop(0, `rgba(255,48,81,${alpha})`);
+      right.addColorStop(1, 'rgba(255,48,81,0)');
+      ctx.fillStyle = right;
+      ctx.fillRect(w - edge, 0, edge, h);
+    }
+
+    ctx.restore();
+
+    // Common special-stage frame.
+    ctx.save();
+    ctx.strokeStyle = type === 'LASER_CORRIDOR'
+      ? 'rgba(255,82,110,.28)'
+      : type === 'SLINGSHOT_ARC'
+        ? 'rgba(182,130,255,.24)'
+        : 'rgba(103,223,255,.22)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(5.5, 5.5, w - 11, h - 11);
+    ctx.restore();
+  }
+
   drawCrisisOverlay(ctx) {
     if (this.failTimer > 0 || this.clearTimer > 0 || this.state !== 'playing') return;
 
@@ -2796,6 +2876,7 @@ export class JetDriftGame {
       }
     }
     if (this.clearTimer <= 0 && this.warpOutTimer <= 0) {
+      this.drawSpecialStageAtmosphere(ctx);
       this.drawDirectionCue(ctx);
       this.drawMinimap(ctx);
       this.drawCrisisOverlay(ctx);

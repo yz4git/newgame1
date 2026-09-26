@@ -355,3 +355,22 @@ SPECIALはSECTORごとに循環。
 - 最初の必須回避障害物をコース約60%地点へ配置し、初速310でも約1.7秒の操作猶予を確保
 - 出口ワープを進行軸から横へ175ずらし、無操作直進ではクリア不可
 - 後半の障害物は高速ラインを読めるサイドマーカー中心にして、310の速度でもクリア可能な余白を確保
+
+## v1.10.0 — In-Play Stage Badge / Special Stage Identity
+
+### Stage number in gameplay
+- プレイ中画面右上に小型のSTAGE番号バッジを常時表示
+- 通常面は控えめな半透明表示
+- SPECIAL面は `SPECIAL · STAGE XX` 表示へ切り替え
+- 既存のSECTOR/STAGE詳細HUDはそのまま維持
+
+### Special stage presentation
+- SPECIAL開始時に中央へ専用タイトル演出を約1.5秒表示
+- SPECIAL STAGE / 専用名 / SECTOR番号とチャレンジ種別を表示
+- VELOCITY ENTRY: 高速ストリーク
+- SLINGSHOT ARC: 紫系の重力リング
+- MOVING WARP: シアンの走査線
+- LASER CORRIDOR: 赤い警戒エッジ
+- 全SPECIALで薄い専用フレームを表示
+- HUDステージカードと右上STAGEバッジもSPECIAL種別に応じて色を変更
+- 演出はゲーム判定や操作を妨げず、追加ボタンなし

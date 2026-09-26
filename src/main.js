@@ -19,6 +19,10 @@ const timeValue = $('timeValue');
 const timeCard = $('timeCard');
 const speedValue = $('speedValue');
 const scoreValue = $('scoreValue');
+const playStageBadge = $('playStageBadge');
+const specialStageOverlay = $('specialStageOverlay');
+const specialStageTitle = $('specialStageTitle');
+const specialStageSub = $('specialStageSub');
 const toast = $('toast');
 const stick = $('stick');
 const stickKnob = $('stickKnob');
@@ -29,6 +33,7 @@ const bestReadout = $('bestReadout');
 const warpModeButton = $('warpModeButton');
 
 let toastTimer = 0;
+let specialOverlayTimer = 0;
 let soundEnabled = true;
 let stickPointer = null;
 let jetPointer = null;
@@ -72,6 +77,30 @@ window.visualViewport?.addEventListener('resize', () => {
   game.resize();
 }, { passive: true });
 
+const SPECIAL_LABELS = {
+  VELOCITY_ENTRY: ['VELOCITY ENTRY', 'HIGH VELOCITY CHALLENGE'],
+  SLINGSHOT_ARC: ['SLINGSHOT ARC', 'GRAVITY ASSIST CHALLENGE'],
+  MOVING_WARP: ['MOVING WARP', 'INTERCEPT THE EXIT'],
+  LASER_CORRIDOR: ['LASER CORRIDOR', 'HIGH RISK TRANSIT'],
+};
+
+function showSpecialStage(snapshot) {
+  if (!snapshot?.specialType) return;
+  const label = SPECIAL_LABELS[snapshot.specialType] || [snapshot.stageName || 'SPECIAL', 'SPECIAL CHALLENGE'];
+  specialStageTitle.textContent = label[0];
+  specialStageSub.textContent = 'SECTOR ' + String(snapshot.sectorIndex || 1).padStart(2, '0') + ' · ' + label[1];
+  specialStageOverlay.dataset.type = snapshot.specialType;
+  specialStageOverlay.hidden = false;
+  specialStageOverlay.classList.remove('show');
+  void specialStageOverlay.offsetWidth;
+  specialStageOverlay.classList.add('show');
+  clearTimeout(specialOverlayTimer);
+  specialOverlayTimer = setTimeout(() => {
+    specialStageOverlay.classList.remove('show');
+    setTimeout(() => { specialStageOverlay.hidden = true; }, 260);
+  }, 1550);
+}
+
 function syncHud(snapshot = game.getSnapshot()) {
   const no = String(snapshot.stageIndex + 1).padStart(snapshot.stageIndex >= 24 ? 3 : 2, '0');
   const sectorNo = String(snapshot.sectorIndex || 1).padStart(2, '0');
@@ -80,6 +109,11 @@ function syncHud(snapshot = game.getSnapshot()) {
   stageNumber.textContent = 'SECTOR ' + sectorNo + ' · ' + sectorStage + '/' + sectorLength + ' · STAGE ' + no;
   stageName.textContent = (snapshot.specialType ? '◆ ' : '') + (snapshot.sectorName || '') + ' · ' + snapshot.stageName;
   stageHint.textContent = snapshot.stageHint;
+  playStageBadge.textContent = (snapshot.specialType ? 'SPECIAL · ' : '') + 'STAGE ' + no;
+  playStageBadge.classList.toggle('special', Boolean(snapshot.specialType));
+  playStageBadge.dataset.type = snapshot.specialType || '';
+  hud.classList.toggle('special-stage', Boolean(snapshot.specialType));
+  hud.dataset.specialType = snapshot.specialType || '';
   fuelValue.textContent = Math.round(snapshot.fuel) + '%';
   fuelFill.style.width = clamp(snapshot.fuel, 0, 100) + '%';
   const fuelWarning = snapshot.fuel <= 25 && snapshot.fuel > 12;
@@ -118,7 +152,9 @@ function setState(state, detail = {}) {
     return;
   }
   if (state === 'stage' || state === 'hud') {
-    if (!hud.hidden) syncHud(detail?.stageIndex == null ? game.getSnapshot() : detail);
+    const snapshot = detail?.stageIndex == null ? game.getSnapshot() : detail;
+    if (!hud.hidden) syncHud(snapshot);
+    if (state === 'stage' && snapshot.specialType) showSpecialStage(snapshot);
     return;
   }
   if (state === 'settings') {
@@ -139,6 +175,8 @@ function setState(state, detail = {}) {
     return;
   }
   if (state === 'title') {
+    specialStageOverlay.hidden = true;
+    specialStageOverlay.classList.remove('show');
     hud.hidden = true;
     controls.hidden = true;
     pauseScreen.hidden = true;

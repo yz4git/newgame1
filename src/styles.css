@@ -254,3 +254,117 @@ button{font:inherit}
   .experiment-toggle{min-height:30px;font-size:8px}
   .experiment-panel small{font-size:7px}
 }
+
+/* v1.10 play stage badge + special-stage presentation */
+.play-stage-badge{
+  position:absolute;
+  top:calc(10px + var(--safe-top));
+  right:calc(12px + var(--safe-right));
+  min-width:76px;
+  padding:5px 9px 4px;
+  border:1px solid rgba(123,199,231,.20);
+  background:rgba(2,9,15,.66);
+  color:rgba(190,224,239,.72);
+  font:850 8px ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.12em;
+  text-align:center;
+  backdrop-filter:blur(8px);
+  box-shadow:0 8px 24px rgba(0,0,0,.22);
+}
+.play-stage-badge.special{
+  color:#effcff;
+  border-color:rgba(109,232,255,.66);
+  background:linear-gradient(110deg,rgba(20,72,94,.86),rgba(6,20,31,.80));
+  box-shadow:0 0 18px rgba(85,222,255,.22),0 8px 24px rgba(0,0,0,.28);
+}
+.play-stage-badge.special[data-type="SLINGSHOT_ARC"]{
+  border-color:rgba(193,145,255,.72);
+  background:linear-gradient(110deg,rgba(67,36,104,.88),rgba(14,11,29,.84));
+  box-shadow:0 0 20px rgba(169,108,255,.22);
+}
+.play-stage-badge.special[data-type="LASER_CORRIDOR"]{
+  border-color:rgba(255,91,118,.74);
+  background:linear-gradient(110deg,rgba(102,19,37,.88),rgba(30,6,13,.84));
+  box-shadow:0 0 20px rgba(255,73,103,.24);
+}
+.special-stage-overlay{
+  position:absolute;
+  z-index:5;
+  left:50%;
+  top:42%;
+  width:min(74vw,620px);
+  transform:translate(-50%,-50%) scale(.94);
+  text-align:center;
+  pointer-events:none;
+  opacity:0;
+  filter:blur(5px);
+  transition:opacity .20s ease,transform .28s ease,filter .24s ease;
+}
+.special-stage-overlay.show{
+  opacity:1;
+  transform:translate(-50%,-50%) scale(1);
+  filter:blur(0);
+}
+.special-stage-overlay::before,
+.special-stage-overlay::after{
+  content:"";
+  display:block;
+  height:1px;
+  margin:0 auto 10px;
+  width:min(80%,460px);
+  background:linear-gradient(90deg,transparent,rgba(112,229,255,.88),transparent);
+  box-shadow:0 0 18px rgba(78,214,255,.34);
+}
+.special-stage-overlay::after{margin:11px auto 0}
+.special-stage-kicker{
+  color:#7bdff8;
+  font:900 9px ui-monospace,monospace;
+  letter-spacing:.30em;
+  text-shadow:0 0 14px rgba(75,213,255,.45);
+}
+.special-stage-overlay strong{
+  display:block;
+  margin-top:5px;
+  color:#f2fcff;
+  font:950 clamp(24px,5.2vw,54px) ui-monospace,monospace;
+  line-height:.94;
+  letter-spacing:.06em;
+  text-shadow:0 0 16px rgba(112,230,255,.44),0 10px 35px rgba(0,0,0,.75);
+}
+.special-stage-overlay span{
+  display:block;
+  margin-top:8px;
+  color:rgba(188,226,240,.72);
+  font:800 8px ui-monospace,monospace;
+  letter-spacing:.18em;
+}
+.special-stage-overlay[data-type="SLINGSHOT_ARC"] .special-stage-kicker,
+.special-stage-overlay[data-type="SLINGSHOT_ARC"] strong{color:#e2caff;text-shadow:0 0 17px rgba(179,113,255,.52)}
+.special-stage-overlay[data-type="SLINGSHOT_ARC"]::before,
+.special-stage-overlay[data-type="SLINGSHOT_ARC"]::after{background:linear-gradient(90deg,transparent,rgba(190,133,255,.90),transparent)}
+.special-stage-overlay[data-type="LASER_CORRIDOR"] .special-stage-kicker,
+.special-stage-overlay[data-type="LASER_CORRIDOR"] strong{color:#ffe5ea;text-shadow:0 0 18px rgba(255,69,101,.58)}
+.special-stage-overlay[data-type="LASER_CORRIDOR"]::before,
+.special-stage-overlay[data-type="LASER_CORRIDOR"]::after{background:linear-gradient(90deg,transparent,rgba(255,77,108,.90),transparent)}
+.hud.special-stage .stage-card{
+  border-color:rgba(103,223,255,.40);
+  box-shadow:0 0 22px rgba(60,199,244,.10),0 12px 34px rgba(0,0,0,.28);
+}
+.hud[data-special-type="SLINGSHOT_ARC"] .stage-card{border-color:rgba(182,130,255,.46)}
+.hud[data-special-type="LASER_CORRIDOR"] .stage-card{border-color:rgba(255,84,112,.46)}
+@media(max-width:700px){
+  .play-stage-badge{
+    top:calc(7px + var(--safe-top));
+    right:calc(8px + var(--safe-right));
+    min-width:64px;
+    padding:4px 7px;
+    font-size:7px;
+  }
+  .special-stage-overlay{top:39%;width:82vw}
+  .special-stage-kicker{font-size:7px}
+  .special-stage-overlay span{font-size:7px}
+}
+@media(max-height:500px) and (orientation:landscape){
+  .special-stage-overlay{top:43%}
+  .special-stage-overlay strong{font-size:clamp(22px,8vh,38px)}
+}
