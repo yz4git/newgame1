@@ -250,8 +250,9 @@ function createStage(index) {
 
     // Final approach reverses the lateral direction once more:
     // + gap -> - gap -> + gap -> portal on the opposite side.
-    portal.x = dir.x * entryDistance + perp.x * -120;
-    portal.y = dir.y * entryDistance + perp.y * -120;
+    const exitExtension = 220;
+    portal.x = dir.x * (entryDistance + exitExtension) + perp.x * -120;
+    portal.y = dir.y * (entryDistance + exitExtension) + perp.y * -120;
 
     // Guidance fuel near the intended lines; taking them is optional.
     fuels.length = 0;
@@ -2243,7 +2244,8 @@ export class JetDriftGame {
     if (this.state !== 'playing') return;
     const w = Math.min(158, this.width * 0.23);
     const h = Math.min(104, this.height * 0.25);
-    const edge = this.width / this.height > 1.35 ? 54 : 20;
+    const wide = this.width / this.height > 1.35;
+    const edge = wide ? 110 : 20;
     const x = this.width - w - edge;
     const y = 16;
     const b = this.stage.bounds;
