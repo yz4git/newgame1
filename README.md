@@ -469,3 +469,66 @@ STAGE 24 LASER CORRIDOR
 - iPhone横画面のギミック一覧を3列から2列へ変更
 - 説明文を7pxから8pxへ拡大
 - プレビュー高さとカード幅を調整し、見た目と説明の両方を読みやすく改善
+
+
+## v1.13.0 — Route Readability / Retry Learning / Themed Stages
+
+プレイレビューで見つかった「物理的にはクリア可能だが先の情報が遅い」「後半がギミック全部乗せになりやすい」を中心にゲームプレイを整理。
+
+### 1. NEXT GATE guidance
+- VELOCITY ENTRYでは最終WARP方向より次のスラロームゲートを優先案内
+- 画面上部へ `NEXT GATE 1/3 →` のような専用表示を追加
+- 通過すると自動で次のゲートへ切り替え
+- 次ゲートが画面内へ入ったら安全開口中心へリングとG1/G2/G3表示
+- 3ゲート通過後だけ通常のWARP方向案内へ戻る
+- これにより最終出口が逆側にある時も誤誘導しない
+
+### 2. Inertia prediction line
+- 自機の現在速度ベクトルから約0.62〜0.82秒先までDRIFT予測線を描画
+- 高速時ほど長い予測時間を使用
+- 終点へ小さなリングを表示
+- 速度180以上では `0.8s DRIFT` のように予測時間も表示
+- 旧来の短い70px速度線は廃止し、世界座標ベースの予測線へ統一
+- 重力やJETの未来入力は含めず「現在の慣性だけならどこへ行くか」を表示
+
+### 3. LAST FAIL marker
+- 衝突・TIME OUT・燃料切れなどで失敗したワールド座標を保存
+- AUTO RETRY後も同じステージ内に赤い `LAST FAIL` マーカーを表示
+- ミニマップにも赤い×を表示
+- 次ステージへ進む、または新しいRUNを開始すると消去
+- 固定位相リトライと組み合わせ、前回より早く切り返す学習をしやすくした
+
+### 4. SPECIAL stages are now purpose-built
+- SLINGSHOT ARC:
+  - 通常アステロイド / 地雷 / 風 / PULSE / PHASE / BOOST等を除去
+  - 2つの強い重力井戸が主役
+  - 燃料26%と重力加速の攻略へ集中
+- MOVING WARP:
+  - 障害物をアステロイド最大3＋地雷1までに削減
+  - 重力 / レーザー / 風 / PULSE / PHASE / BOOST / DRAGを除去
+  - 移動WARP振幅を118へ、速度を1.18へ調整し予測迎撃が主役
+- LASER CORRIDOR:
+  - 通常障害物を除去
+  - 専用回転レーザー4本の回廊へ再構成
+  - 無関係な後半ギミックを混ぜず周期読みへ集中
+- VELOCITY ENTRYは既存の専用高速スラローム構成を維持
+
+### 5. Late-stage theme combinations
+通常STAGE 13以降はギミックの累積全部乗せを廃止し、原則2〜3系統だけを組み合わせる。
+
+- `ORBITAL DODGE`: ASTEROID + MINE + LASER
+- `VECTOR STORM`: MINE + SOLAR WIND + PULSE
+- `GRAVITY LINE`: ASTEROID + GRAVITY + BOOST
+- `PHASE RUN`: LASER + PHASE + BOOST
+- `DEEP CURRENT`: GRAVITY + WIND + DRAG
+- `BOOST VECTOR`: ASTEROID + WIND + BOOST
+- `DRAG GRAVITY`: ASTEROID + GRAVITY + DRAG
+
+各系統の物量も制限:
+- ASTEROID 最大4
+- MINE 最大2
+- GRAVITY 最大2
+- LASER 最大2
+- WIND / PULSE / PHASE / BOOST / DRAG 各最大1
+
+ENDLESSでもこのテーマ制を循環し、ステージごとに攻略意図が見える構成を維持する。

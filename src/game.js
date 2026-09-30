@@ -51,6 +51,8 @@ function createStage(index) {
   let fuelStart = Math.max(58, 88 - Math.min(30, n * 1.15));
   let startVelocity = null;
   let portalMotion = null;
+  let normalTheme = null;
+  const velocityGates = [];
 
   const asteroids = [];
   const asteroidCount = n < 3 ? 0 : Math.min(10, 1 + Math.floor((n - 2) / 2));
@@ -234,6 +236,13 @@ function createStage(index) {
       const gate = gateData[g];
       const gateYx = dir.x * entryDistance * gate.t;
       const gateYy = dir.y * entryDistance * gate.t;
+      velocityGates.push({
+        index: g + 1,
+        x: gateYx + perp.x * gate.gap,
+        y: gateYy + perp.y * gate.gap,
+        along: entryDistance * gate.t,
+        lateral: gate.gap,
+      });
       for (const lane of wallXs) {
         if (Math.abs(lane - gate.gap) < 92) continue;
         asteroids.push({
@@ -277,7 +286,15 @@ function createStage(index) {
     time += 4.3;
   } else if (specialType === 'SLINGSHOT_ARC') {
     fuelStart = Math.min(fuelStart, 26);
-    time += 2.0;
+    time += 2.4;
+    asteroids.length = 0;
+    mines.length = 0;
+    lasers.length = 0;
+    winds.length = 0;
+    repulsors.length = 0;
+    phaseGates.length = 0;
+    boostRings.length = 0;
+    dragClouds.length = 0;
     wells.length = 0;
     for (let i = 0; i < 2; i += 1) {
       const t = i === 0 ? 0.38 : 0.66;
@@ -294,23 +311,86 @@ function createStage(index) {
       });
     }
   } else if (specialType === 'MOVING_WARP') {
-    portalMotion = { baseX: portal.x, baseY: portal.y, axisX: perp.x, axisY: perp.y, amp: 105, speed: 1.25, phase: 0 };
-    time += 1.5;
+    // Keep only a light approach screen: the moving exit is the actual challenge.
+    asteroids.splice(3);
+    mines.splice(1);
+    wells.length = 0;
+    lasers.length = 0;
+    winds.length = 0;
+    repulsors.length = 0;
+    phaseGates.length = 0;
+    boostRings.length = 0;
+    dragClouds.length = 0;
+    portalMotion = { baseX: portal.x, baseY: portal.y, axisX: perp.x, axisY: perp.y, amp: 118, speed: 1.18, phase: 0 };
+    time += 2.0;
   } else if (specialType === 'LASER_CORRIDOR') {
-    time += 1.4;
-    for (let i = 0; i < 3; i += 1) {
-      const t = 0.30 + i * 0.20;
+    // Purpose-built laser stage: remove unrelated late-game clutter.
+    asteroids.length = 0;
+    mines.length = 0;
+    wells.length = 0;
+    lasers.length = 0;
+    winds.length = 0;
+    repulsors.length = 0;
+    phaseGates.length = 0;
+    boostRings.length = 0;
+    dragClouds.length = 0;
+    time += 2.0;
+    for (let i = 0; i < 4; i += 1) {
+      const t = 0.24 + i * 0.17;
       const side = i % 2 === 0 ? 1 : -1;
       lasers.push({
-        x: portal.x * t + perp.x * side * 30,
-        y: portal.y * t + perp.y * side * 30,
-        len: 72 + i * 7,
+        x: portal.x * t + perp.x * side * 28,
+        y: portal.y * t + perp.y * side * 28,
+        len: 68 + i * 8,
         angle: Math.atan2(perp.y, perp.x),
-        speed: side * (0.28 + i * 0.06),
+        speed: side * (0.26 + i * 0.055),
         width: 5,
         corridor: true,
       });
     }
+  }
+
+  if (!specialType && n >= 13) {
+    const themeSets = [
+      { id: 'ORBITAL_DODGE', keep: ['asteroids', 'mines', 'lasers'] },
+      { id: 'VECTOR_STORM', keep: ['mines', 'winds', 'repulsors'] },
+      { id: 'GRAVITY_LINE', keep: ['asteroids', 'wells', 'boostRings'] },
+      { id: 'PHASE_RUN', keep: ['lasers', 'phaseGates', 'boostRings'] },
+      { id: 'DEEP_CURRENT', keep: ['wells', 'winds', 'dragClouds'] },
+    ];
+
+    let theme = themeSets[(n - 13) % themeSets.length];
+    if (n === 13) theme = themeSets[0];
+    if (n === 14) theme = { id: 'PHASE_RUN', keep: ['asteroids', 'lasers', 'phaseGates'] };
+    if (n === 17) theme = { id: 'BOOST_VECTOR', keep: ['asteroids', 'winds', 'boostRings'] };
+    if (n === 21) theme = { id: 'DRAG_GRAVITY', keep: ['asteroids', 'wells', 'dragClouds'] };
+    normalTheme = theme.id;
+
+    const groups = {
+      asteroids,
+      mines,
+      wells,
+      lasers,
+      winds,
+      repulsors,
+      phaseGates,
+      boostRings,
+      dragClouds,
+    };
+    for (const [name, list] of Object.entries(groups)) {
+      if (!theme.keep.includes(name)) list.length = 0;
+    }
+
+    // Keep late stages readable: theme depth comes from interactions, not object count.
+    asteroids.splice(4);
+    mines.splice(2);
+    wells.splice(2);
+    lasers.splice(2);
+    winds.splice(1);
+    repulsors.splice(1);
+    phaseGates.splice(1);
+    boostRings.splice(1);
+    dragClouds.splice(1);
   }
 
   const margin = 420;
@@ -331,6 +411,13 @@ function createStage(index) {
   if (n === 14) title = 'PHASE GATE';
   if (n === 17) title = 'BOOST RING';
   if (n === 21) title = 'DRAG CLOUD';
+  if (normalTheme === 'ORBITAL_DODGE') title = 'ORBITAL DODGE';
+  if (normalTheme === 'VECTOR_STORM') title = 'VECTOR STORM';
+  if (normalTheme === 'GRAVITY_LINE') title = 'GRAVITY LINE';
+  if (normalTheme === 'PHASE_RUN') title = 'PHASE RUN';
+  if (normalTheme === 'DEEP_CURRENT') title = 'DEEP CURRENT';
+  if (normalTheme === 'BOOST_VECTOR') title = 'BOOST VECTOR';
+  if (normalTheme === 'DRAG_GRAVITY') title = 'DRAG GRAVITY';
   if (specialType === 'VELOCITY_ENTRY') title = 'SPECIAL · VELOCITY ENTRY';
   if (specialType === 'SLINGSHOT_ARC') title = 'SPECIAL · SLINGSHOT ARC';
   if (specialType === 'MOVING_WARP') title = 'SPECIAL · MOVING WARP';
@@ -348,7 +435,14 @@ function createStage(index) {
   if (n === 14) hint = 'PHASE GATEが消える瞬間を抜けるか端を回り込む';
   if (n === 17) hint = '緑のBOOST RINGを通ると進行方向へ加速';
   if (n === 21) hint = 'DRAG CLOUD内では速度が落ちる。短く横切るか迂回';
-  if (specialType === 'VELOCITY_ENTRY') hint = '高速310で自動進行。広めのゲートを右→左→右と抜け、最後に出口側へ切り返す';
+  if (normalTheme === 'ORBITAL_DODGE') hint = 'アステロイド・地雷・レーザーの位置関係を読み、一本の安全ラインを作る';
+  if (normalTheme === 'VECTOR_STORM') hint = '風とPULSEで流される前提で、少ない噴射から軌道を組み立てる';
+  if (normalTheme === 'GRAVITY_LINE') hint = '重力とBOOSTをつなぎ、JETを節約しながら加速する';
+  if (normalTheme === 'PHASE_RUN') hint = 'レーザーとPHASEの周期が重なる安全時間帯を抜ける';
+  if (normalTheme === 'DEEP_CURRENT') hint = '重力・風・DRAGの速度変化を利用して出口へ流す';
+  if (normalTheme === 'BOOST_VECTOR') hint = 'BOOST RINGへラインを合わせ、加速後の慣性で出口へつなぐ';
+  if (normalTheme === 'DRAG_GRAVITY') hint = 'DRAGを避けつつ重力で軌道を曲げ、速度を失わず抜ける';
+  if (specialType === 'VELOCITY_ENTRY') hint = '高速310で自動進行。NEXT GATEを右→左→右と抜け、最後に出口側へ切り返す';
   if (specialType === 'SLINGSHOT_ARC') hint = '燃料は少ない。重力井戸へ接近し、接線速度を出口へ変える';
   if (specialType === 'MOVING_WARP') hint = 'ワープ口が横移動する。到達時刻まで読んで進路を合わせる';
   if (specialType === 'LASER_CORRIDOR') hint = 'レーザーの周期を読み、狭い回廊を一気に抜ける';
@@ -369,6 +463,10 @@ function createStage(index) {
     sectorFinal,
     sectorName,
     specialType,
+    normalTheme,
+    routeDir: { ...dir },
+    routePerp: { ...perp },
+    velocityGates,
     bounds: { minX, maxX, minY, maxY },
     asteroids,
     mines,
@@ -873,6 +971,7 @@ export class JetDriftGame {
     this.trailSampleTimer = 0;
     this.pathLength = 0;
     this.lastLineRating = null;
+    this.lastDeathMarker = null;
     this.warpTravelDir = { x: 0, y: -1 };
     this.wireframeWarpEnabled = true;
     try {
@@ -1053,6 +1152,7 @@ export class JetDriftGame {
     this.paused = false;
     this.score = 0;
     this.attempts = 0;
+    this.lastDeathMarker = null;
     this.startStage(0, true);
     void this.audio.startMusic('slow');
     this.onChange('start', this.getSnapshot());
@@ -1085,6 +1185,9 @@ export class JetDriftGame {
   }
 
   startStage(index, silent = false, warpOut = false) {
+    if (this.lastDeathMarker && this.lastDeathMarker.stageIndex !== index) {
+      this.lastDeathMarker = null;
+    }
     this.stageIndex = index;
     this.stage = createStage(index);
     this.player.x = 0;
@@ -1200,6 +1303,7 @@ export class JetDriftGame {
       sectorLength: this.stage.sectorLength,
       sectorName: this.stage.sectorName,
       specialType: this.stage.specialType,
+      normalTheme: this.stage.normalTheme,
       stageStarted: this.stageStarted,
       wireframeWarp: this.wireframeWarpEnabled,
     };
@@ -1207,6 +1311,12 @@ export class JetDriftGame {
 
   triggerFail(reason) {
     if (this.state !== 'playing' || this.failTimer > 0 || this.clearTimer > 0) return;
+    this.lastDeathMarker = {
+      stageIndex: this.stageIndex,
+      x: this.player.x,
+      y: this.player.y,
+      reason,
+    };
     this.saveCurrentGhost();
     this.failTimer = 0.50;
     this.thrusting = false;
@@ -2198,26 +2308,133 @@ export class JetDriftGame {
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    const speed = Math.hypot(p.vx, p.vy);
-    if (speed > 10) {
-      const dx = p.vx / speed;
-      const dy = p.vy / speed;
-      const trailAngle = this.screenAngleForVector(p.x, p.y, dx, dy);
-      const trailLen = clamp(speed * 0.18, 20, 70);
-      ctx.strokeStyle = 'rgba(118,213,255,.45)';
-      ctx.setLineDash([4, 5]);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(trailAngle) * trailLen, Math.sin(trailAngle) * trailLen);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
+    ctx.restore();
+  }
 
+  drawVelocityPrediction(ctx) {
+    if (!this.stageStarted || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0) return;
+    const p = this.player;
+    const speed = Math.hypot(p.vx, p.vy);
+    if (speed < 18) return;
+
+    const horizon = lerp(0.62, 0.82, clamp(speed / 420, 0, 1));
+    const steps = 10;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(122,225,255,.34)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i += 1) {
+      const t = horizon * (i / steps);
+      const s = this.worldToScreen(p.x + p.vx * t, p.y + p.vy * t);
+      if (i === 0) ctx.moveTo(s.x, s.y);
+      else ctx.lineTo(s.x, s.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const end = this.worldToScreen(p.x + p.vx * horizon, p.y + p.vy * horizon);
+    ctx.strokeStyle = 'rgba(162,239,255,.72)';
+    ctx.fillStyle = 'rgba(111,218,255,.16)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(end.x, end.y, 5.5, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+
+    if (speed >= 180) {
+      ctx.font = '800 7px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(160,224,242,.64)';
+      ctx.textAlign = 'left';
+      ctx.fillText(horizon.toFixed(1) + 's DRIFT', end.x + 8, end.y - 6);
+    }
+    ctx.restore();
+  }
+
+  drawLastDeathMarker(ctx) {
+    const marker = this.lastDeathMarker;
+    if (!marker || marker.stageIndex !== this.stageIndex || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0) return;
+    const s = this.worldToScreen(marker.x, marker.y);
+    if (s.x < -50 || s.x > this.width + 50 || s.y < -50 || s.y > this.height + 50) return;
+
+    const pulse = 0.72 + Math.sin(this.globalTime * 5.5) * 0.12;
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.scale(s.scale || 1, (s.scale || 1) * (s.squash || 1));
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = 'rgba(255,92,105,.82)';
+    ctx.fillStyle = 'rgba(255,70,86,.08)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-7, -7);
+    ctx.lineTo(7, 7);
+    ctx.moveTo(7, -7);
+    ctx.lineTo(-7, 7);
+    ctx.stroke();
+    ctx.font = '900 7px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(255,164,171,.86)';
+    ctx.textAlign = 'center';
+    ctx.fillText('LAST FAIL', 0, -21);
+    ctx.restore();
+  }
+
+  getNextVelocityGate() {
+    if (this.stage.specialType !== 'VELOCITY_ENTRY' || !this.stage.velocityGates?.length) return null;
+    const dir = this.stage.routeDir || { x: 0, y: -1 };
+    const along = this.player.x * dir.x + this.player.y * dir.y;
+    return this.stage.velocityGates.find((gate) => along < gate.along + 24) || null;
+  }
+
+  drawNextGateCue(ctx) {
+    const gate = this.getNextVelocityGate();
+    if (!gate || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0) return;
+
+    const target = this.worldToScreen(gate.x, gate.y);
+    const perp = this.stage.routePerp || { x: 1, y: 0 };
+    const lateral = (gate.x - this.player.x) * perp.x + (gate.y - this.player.y) * perp.y;
+    const arrow = lateral > 34 ? '→' : lateral < -34 ? '←' : '●';
+    const dangerOffset = this.timeLeft <= 4 ? 34 : 0;
+    const y = 24 + dangerOffset;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '900 10px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(224,250,255,.94)';
+    ctx.shadowColor = '#68ddff';
+    ctx.shadowBlur = 10;
+    const label = 'NEXT GATE ' + gate.index + '/3  ' + arrow;
+    const width = Math.max(126, ctx.measureText(label).width + 22);
+    ctx.fillStyle = 'rgba(3,16,25,.80)';
+    ctx.strokeStyle = 'rgba(104,224,255,.58)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(this.width * 0.5 - width * 0.5, y - 12, width, 23);
+    ctx.strokeRect(this.width * 0.5 - width * 0.5, y - 12, width, 23);
+    ctx.fillStyle = 'rgba(224,250,255,.96)';
+    ctx.fillText(label, this.width * 0.5, y + 4);
+    ctx.shadowBlur = 0;
+
+    if (target.x > 18 && target.x < this.width - 18 && target.y > 18 && target.y < this.height - 18) {
+      const pulse = 1 + Math.sin(this.stageElapsed * 7) * 0.12;
+      ctx.strokeStyle = 'rgba(112,235,255,.72)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, 14 * pulse, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(205,247,255,.86)';
+      ctx.font = '900 8px ui-monospace, monospace';
+      ctx.fillText('G' + gate.index, target.x, target.y - 19);
+    }
     ctx.restore();
   }
 
   drawDirectionCue(ctx) {
-    const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
+    const nextGate = this.getNextVelocityGate();
+    const targetWorld = nextGate || this.stage.portal;
+    const portal = this.worldToScreen(targetWorld.x, targetWorld.y);
     if (portal.x >= 30 && portal.x <= this.width - 30 && portal.y >= 30 && portal.y <= this.height - 30) return;
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
@@ -2230,7 +2447,7 @@ export class JetDriftGame {
     ctx.save();
     ctx.translate(clamp(tx, margin, this.width - margin), clamp(ty, margin, this.height - margin));
     ctx.rotate(Math.atan2(n.y, n.x));
-    ctx.fillStyle = 'rgba(127,233,255,.9)';
+    ctx.fillStyle = nextGate ? 'rgba(255,232,138,.96)' : 'rgba(127,233,255,.9)';
     ctx.beginPath();
     ctx.moveTo(12, 0);
     ctx.lineTo(-8, -7);
@@ -2302,6 +2519,18 @@ export class JetDriftGame {
       ctx.strokeStyle = '#76ffad';
       ctx.beginPath();
       ctx.arc(p.x, p.y, 2.8, 0, TAU);
+      ctx.stroke();
+    }
+
+    if (this.lastDeathMarker?.stageIndex === this.stageIndex) {
+      const dead = toMini(this.lastDeathMarker.x, this.lastDeathMarker.y);
+      ctx.strokeStyle = 'rgba(255,91,105,.72)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(dead.x - 3, dead.y - 3);
+      ctx.lineTo(dead.x + 3, dead.y + 3);
+      ctx.moveTo(dead.x + 3, dead.y - 3);
+      ctx.lineTo(dead.x - 3, dead.y + 3);
       ctx.stroke();
     }
 
@@ -2855,6 +3084,8 @@ export class JetDriftGame {
     }
 
     this.drawWorld(ctx);
+    this.drawLastDeathMarker(ctx);
+    this.drawVelocityPrediction(ctx);
 
     if (this.failTimer <= 0) {
       if (this.wireframeWarpEnabled) {
@@ -2896,6 +3127,7 @@ export class JetDriftGame {
     }
     if (this.clearTimer <= 0 && this.warpOutTimer <= 0) {
       this.drawSpecialStageAtmosphere(ctx);
+      this.drawNextGateCue(ctx);
       this.drawDirectionCue(ctx);
       this.drawMinimap(ctx);
       this.drawCrisisOverlay(ctx);
