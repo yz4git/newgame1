@@ -68,6 +68,16 @@ https://yz4git.github.io/newgame1/
 
 https://yz4git.github.io/newgame1/latest.html
 
+## v1.14 — Playtest Polish / Learning Feedback
+
+- SPECIAL開始タイトルは約0.72秒で上部の小型表示へ縮退し、高速ステージの視界を早く開ける
+- STAGE 06初回だけ、最初の約2秒に R → L → R のENTRY LINEガイドを表示
+- 重力・SOLAR WIND・DRAG中は慣性予測線をCOAST VECTOR表示へ切り替え、外力ベクトルを追加
+- LAST FAILに失敗カテゴリ（COLLISION / TIME / FUEL / LOST）と直前約0.82秒の赤い軌跡を追加
+- iPhoneで振動APIが使えない場合でも、画面キック・フラッシュ・JET発光で入力/警告/成功/失敗を強化
+- MANUAL本文を拡大して横画面iPhoneでの可読性を改善
+- 2連続クリア以降はワープ遷移を約25%短縮し、高速周回時の待ち時間を削減
+
 ## v1.1 — Countdown / Warp / Explosion
 
 - TIME表示を大型化
