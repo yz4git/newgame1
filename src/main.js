@@ -2,6 +2,7 @@ import { JetDriftGame } from './game.js?v=__BUILD_ID__';
 
 const BUILD_ID = '__BUILD_ID__';
 const $ = (id) => document.getElementById(id);
+const app = $('app');
 const canvas = $('gameCanvas');
 const game = new JetDriftGame(canvas);
 
@@ -43,6 +44,8 @@ const pauseManualButton = $('pauseManualButton');
 
 let toastTimer = 0;
 let specialOverlayTimer = 0;
+let specialOverlayCompactTimer = 0;
+let feedbackTimer = 0;
 let soundEnabled = true;
 let stickPointer = null;
 let jetPointer = null;
@@ -376,13 +379,17 @@ function showSpecialStage(snapshot) {
   specialStageSub.textContent = 'SECTOR ' + String(snapshot.sectorIndex || 1).padStart(2, '0') + ' · ' + label[1];
   specialStageOverlay.dataset.type = snapshot.specialType;
   specialStageOverlay.hidden = false;
-  specialStageOverlay.classList.remove('show');
+  specialStageOverlay.classList.remove('show', 'compact');
   void specialStageOverlay.offsetWidth;
   specialStageOverlay.classList.add('show');
   clearTimeout(specialOverlayTimer);
+  clearTimeout(specialOverlayCompactTimer);
+  specialOverlayCompactTimer = setTimeout(() => {
+    specialStageOverlay.classList.add('compact');
+  }, 720);
   specialOverlayTimer = setTimeout(() => {
-    specialStageOverlay.classList.remove('show');
-    setTimeout(() => { specialStageOverlay.hidden = true; }, 260);
+    specialStageOverlay.classList.remove('show', 'compact');
+    setTimeout(() => { specialStageOverlay.hidden = true; }, 220);
   }, 1550);
 }
 
@@ -461,8 +468,10 @@ function setState(state, detail = {}) {
   }
   if (state === 'title') {
     manualScreen.hidden = true;
+    clearTimeout(specialOverlayTimer);
+    clearTimeout(specialOverlayCompactTimer);
     specialStageOverlay.hidden = true;
-    specialStageOverlay.classList.remove('show');
+    specialStageOverlay.classList.remove('show', 'compact');
     hud.hidden = true;
     controls.hidden = true;
     pauseScreen.hidden = true;
@@ -489,6 +498,37 @@ game.setToastCallback((title, subtitle = '') => {
   toastTimer = setTimeout(() => toast.classList.remove('visible'), 1200);
 });
 
+function playUiFeedback(type) {
+  const feedbackClass = type === 'fail'
+    ? 'fx-fail'
+    : type === 'clear'
+      ? 'fx-clear'
+      : type === 'warningCritical'
+        ? 'fx-critical'
+        : type === 'warning'
+          ? 'fx-warning'
+          : type === 'pickup'
+            ? 'fx-pickup'
+            : '';
+
+  if (feedbackClass) {
+    app.classList.remove('fx-fail', 'fx-clear', 'fx-critical', 'fx-warning', 'fx-pickup');
+    void app.offsetWidth;
+    app.classList.add(feedbackClass);
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => {
+      app.classList.remove('fx-fail', 'fx-clear', 'fx-critical', 'fx-warning', 'fx-pickup');
+    }, type === 'fail' ? 180 : 135);
+  }
+
+  if (!navigator.vibrate) return;
+  if (type === 'fail') navigator.vibrate([14, 20, 24]);
+  else if (type === 'clear') navigator.vibrate([8, 20, 10, 28, 16]);
+  else if (type === 'pickup') navigator.vibrate(8);
+  else if (type === 'warning') navigator.vibrate(7);
+  else if (type === 'warningCritical') navigator.vibrate([7, 26, 10]);
+}
+
 game.setFxCallback((type) => {
   if (type === 'warp3dIn' || type === 'warp3dOut') {
     controls.hidden = true;
@@ -498,12 +538,7 @@ game.setFxCallback((type) => {
     hud.classList.remove('cinematic');
   }
 
-  if (!navigator.vibrate) return;
-  if (type === 'fail') navigator.vibrate([14, 20, 24]);
-  else if (type === 'clear') navigator.vibrate([8, 20, 10, 28, 16]);
-  else if (type === 'pickup') navigator.vibrate(8);
-  else if (type === 'warning') navigator.vibrate(7);
-  else if (type === 'warningCritical') navigator.vibrate([7, 26, 10]);
+  playUiFeedback(type);
 });
 
 syncWarpModeButton();
@@ -572,6 +607,10 @@ jetButton.addEventListener('pointerdown', (event) => {
   try { jetButton.setPointerCapture(event.pointerId); } catch {}
   jetButton.classList.add('pressed');
   game.setThrusting(true);
+  app.classList.remove('fx-jet-tap');
+  void app.offsetWidth;
+  app.classList.add('fx-jet-tap');
+  setTimeout(() => app.classList.remove('fx-jet-tap'), 90);
   if (navigator.vibrate) navigator.vibrate(5);
   event.preventDefault();
 }, { passive: false });
