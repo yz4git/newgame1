@@ -973,6 +973,7 @@ export class JetDriftGame {
     this.lastLineRating = null;
     this.lastDeathMarker = null;
     this.stageAttempt = 0;
+    this.consecutiveClears = 0;
     this.warpTravelDir = { x: 0, y: -1 };
     this.wireframeWarpEnabled = true;
     try {
@@ -1153,6 +1154,7 @@ export class JetDriftGame {
     this.paused = false;
     this.score = 0;
     this.attempts = 0;
+    this.consecutiveClears = 0;
     this.lastDeathMarker = null;
     this.startStage(0, true);
     void this.audio.startMusic('slow');
@@ -1213,7 +1215,12 @@ export class JetDriftGame {
     this.lastLineRating = null;
     this.failTimer = 0;
     this.clearTimer = 0;
-    this.warpOutTimer = warpOut ? (this.wireframeWarpEnabled ? 1.24 : 0.72) : 0;
+    const fastWarpTransition = this.consecutiveClears >= 2;
+    this.warpOutTimer = warpOut
+      ? (this.wireframeWarpEnabled
+        ? (fastWarpTransition ? 0.92 : 1.24)
+        : (fastWarpTransition ? 0.52 : 0.72))
+      : 0;
     this.strandedTimer = 0;
     this.timeWarned = false;
     this.timeCriticalWarned = false;
@@ -1334,6 +1341,7 @@ export class JetDriftGame {
       trail: failTrail,
     };
     this.stageAttempt += 1;
+    this.consecutiveClears = 0;
     this.saveCurrentGhost();
     this.failTimer = 0.50;
     this.thrusting = false;
@@ -1362,7 +1370,11 @@ export class JetDriftGame {
     const sectorBonus = this.stage.sectorFinal ? 500 + this.stage.sectorIndex * 100 : 0;
     const bonus = Math.round(700 + this.timeLeft * 95 + this.fuel * 6 + lineBonus + sectorBonus);
     this.score += bonus;
-    this.clearTimer = this.wireframeWarpEnabled ? 1.58 : 1.00;
+    this.consecutiveClears += 1;
+    const fastClearTransition = this.consecutiveClears >= 2;
+    this.clearTimer = this.wireframeWarpEnabled
+      ? (fastClearTransition ? 1.18 : 1.58)
+      : (fastClearTransition ? 0.74 : 1.00);
     this.thrusting = false;
     this.audio.warp();
     this.onFx('clear');
