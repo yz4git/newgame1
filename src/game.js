@@ -972,6 +972,7 @@ export class JetDriftGame {
     this.pathLength = 0;
     this.lastLineRating = null;
     this.lastDeathMarker = null;
+    this.stageAttempt = 0;
     this.warpTravelDir = { x: 0, y: -1 };
     this.wireframeWarpEnabled = true;
     try {
@@ -1188,6 +1189,7 @@ export class JetDriftGame {
     if (this.lastDeathMarker && this.lastDeathMarker.stageIndex !== index) {
       this.lastDeathMarker = null;
     }
+    if (this.stageIndex !== index) this.stageAttempt = 0;
     this.stageIndex = index;
     this.stage = createStage(index);
     this.player.x = 0;
@@ -1311,12 +1313,27 @@ export class JetDriftGame {
 
   triggerFail(reason) {
     if (this.state !== 'playing' || this.failTimer > 0 || this.clearTimer > 0) return;
+    this.recordTrailPoint(true);
+    const cutoff = Math.max(0, this.stageElapsed - 0.82);
+    const failTrail = (this.currentTrail || [])
+      .filter((point) => point.t >= cutoff)
+      .map((point) => ({ x: point.x, y: point.y, t: point.t }));
+    const category = reason === 'TIME OUT'
+      ? 'TIME'
+      : reason === 'OUT OF FUEL'
+        ? 'FUEL'
+        : reason === 'LOST IN SPACE'
+          ? 'LOST'
+          : 'COLLISION';
     this.lastDeathMarker = {
       stageIndex: this.stageIndex,
       x: this.player.x,
       y: this.player.y,
       reason,
+      category,
+      trail: failTrail,
     };
+    this.stageAttempt += 1;
     this.saveCurrentGhost();
     this.failTimer = 0.50;
     this.thrusting = false;
@@ -2311,18 +2328,106 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  getExternalForcePreview() {
+    const p = this.player;
+    let ax = 0;
+    let ay = 0;
+    let active = false;
+
+    for (const well of this.stage.wells) {
+      const dx = well.x - p.x;
+      const dy = well.y - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d < well.range && d > 2) {
+        const closeness = 1 - d / well.range;
+        const pull = (closeness * 0.72 + closeness * closeness * 1.18) * well.strength;
+        ax += dx / d * pull;
+        ay += dy / d * pull;
+        active = true;
+      }
+    }
+
+    for (const wind of this.stage.winds) {
+      const d = Math.hypot(p.x - wind.x, p.y - wind.y);
+      if (d < wind.range) {
+        const falloff = 1 - d / wind.range;
+        ax += wind.dx * wind.strength * falloff;
+        ay += wind.dy * wind.strength * falloff;
+        active = true;
+      }
+    }
+
+    for (const cloud of this.stage.dragClouds) {
+      const d = Math.hypot(p.x - cloud.x, p.y - cloud.y);
+      if (d < cloud.range) {
+        const falloff = 1 - d / cloud.range;
+        ax -= p.vx * cloud.drag * falloff;
+        ay -= p.vy * cloud.drag * falloff;
+        active = true;
+      }
+    }
+
+    return { ax, ay, magnitude: Math.hypot(ax, ay), active };
+  }
+
+  drawVelocityEntryGuide(ctx) {
+    if (
+      this.stageIndex !== 5 ||
+      this.stage.specialType !== 'VELOCITY_ENTRY' ||
+      this.stageAttempt > 0 ||
+      this.stageElapsed > 2.05 ||
+      this.failTimer > 0 ||
+      this.clearTimer > 0 ||
+      this.warpOutTimer > 0
+    ) return;
+
+    const points = [
+      { x: 0, y: 0 },
+      ...(this.stage.velocityGates || []).map((gate) => ({ x: gate.x, y: gate.y })),
+      { x: this.stage.portal.x, y: this.stage.portal.y },
+    ];
+    if (points.length < 3) return;
+
+    const alpha = clamp(1 - Math.max(0, this.stageElapsed - 1.35) / 0.70, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = 0.72 * alpha;
+    ctx.strokeStyle = 'rgba(114,235,255,.88)';
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([10, 9]);
+    ctx.shadowColor = '#61dcff';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const sp = this.worldToScreen(point.x, point.y);
+      if (index === 0) ctx.moveTo(sp.x, sp.y);
+      else ctx.lineTo(sp.x, sp.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const anchor = this.worldToScreen(points[Math.min(1, points.length - 1)].x, points[Math.min(1, points.length - 1)].y);
+    ctx.shadowBlur = 8;
+    ctx.font = '900 8px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(221,251,255,.96)';
+    ctx.textAlign = 'center';
+    ctx.fillText('ENTRY LINE  ·  R → L → R', anchor.x, Math.max(40, anchor.y - 22));
+    ctx.restore();
+  }
+
   drawVelocityPrediction(ctx) {
     if (!this.stageStarted || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0) return;
     const p = this.player;
     const speed = Math.hypot(p.vx, p.vy);
     if (speed < 18) return;
 
+    const force = this.getExternalForcePreview();
+    const underExternalForce = force.active && force.magnitude > 4;
     const horizon = lerp(0.62, 0.82, clamp(speed / 420, 0, 1));
     const steps = 10;
     ctx.save();
-    ctx.strokeStyle = 'rgba(122,225,255,.34)';
+    ctx.strokeStyle = underExternalForce ? 'rgba(255,205,125,.38)' : 'rgba(122,225,255,.34)';
     ctx.lineWidth = 1.4;
-    ctx.setLineDash([5, 6]);
+    ctx.setLineDash(underExternalForce ? [3, 7] : [5, 6]);
     ctx.beginPath();
     for (let i = 0; i <= steps; i += 1) {
       const t = horizon * (i / steps);
@@ -2334,19 +2439,44 @@ export class JetDriftGame {
     ctx.setLineDash([]);
 
     const end = this.worldToScreen(p.x + p.vx * horizon, p.y + p.vy * horizon);
-    ctx.strokeStyle = 'rgba(162,239,255,.72)';
-    ctx.fillStyle = 'rgba(111,218,255,.16)';
+    ctx.strokeStyle = underExternalForce ? 'rgba(255,224,166,.80)' : 'rgba(162,239,255,.72)';
+    ctx.fillStyle = underExternalForce ? 'rgba(255,190,104,.14)' : 'rgba(111,218,255,.16)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(end.x, end.y, 5.5, 0, TAU);
     ctx.fill();
     ctx.stroke();
 
-    if (speed >= 180) {
+    if (underExternalForce) {
+      const center = this.worldToScreen(p.x, p.y);
+      const forceScale = clamp(22 + force.magnitude * 0.10, 24, 62);
+      const fn = normalize(force.ax, force.ay, 0, -1);
+      const fx = center.x + fn.x * forceScale;
+      const fy = center.y + fn.y * forceScale;
+      ctx.strokeStyle = 'rgba(255,190,102,.72)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y);
+      ctx.lineTo(fx, fy);
+      ctx.stroke();
+      const angle = Math.atan2(fy - center.y, fx - center.x);
+      ctx.beginPath();
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx - Math.cos(angle - 0.55) * 8, fy - Math.sin(angle - 0.55) * 8);
+      ctx.moveTo(fx, fy);
+      ctx.lineTo(fx - Math.cos(angle + 0.55) * 8, fy - Math.sin(angle + 0.55) * 8);
+      ctx.stroke();
+    }
+
+    if (speed >= 150 || underExternalForce) {
       ctx.font = '800 7px ui-monospace, monospace';
-      ctx.fillStyle = 'rgba(160,224,242,.64)';
+      ctx.fillStyle = underExternalForce ? 'rgba(255,217,154,.78)' : 'rgba(160,224,242,.64)';
       ctx.textAlign = 'left';
-      ctx.fillText(horizon.toFixed(1) + 's DRIFT', end.x + 8, end.y - 6);
+      ctx.fillText(
+        underExternalForce ? horizon.toFixed(1) + 's COAST VECTOR · FORCE ACTIVE' : horizon.toFixed(1) + 's DRIFT',
+        end.x + 8,
+        end.y - 6,
+      );
     }
     ctx.restore();
   }
@@ -2355,8 +2485,24 @@ export class JetDriftGame {
     const marker = this.lastDeathMarker;
     if (!marker || marker.stageIndex !== this.stageIndex || this.failTimer > 0 || this.clearTimer > 0 || this.warpOutTimer > 0) return;
     const s = this.worldToScreen(marker.x, marker.y);
-    if (s.x < -50 || s.x > this.width + 50 || s.y < -50 || s.y > this.height + 50) return;
 
+    if (marker.trail?.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,83,104,.40)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      marker.trail.forEach((point, index) => {
+        const sp = this.worldToScreen(point.x, point.y);
+        if (index === 0) ctx.moveTo(sp.x, sp.y);
+        else ctx.lineTo(sp.x, sp.y);
+      });
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    if (s.x < -50 || s.x > this.width + 50 || s.y < -50 || s.y > this.height + 50) return;
     const pulse = 0.72 + Math.sin(this.globalTime * 5.5) * 0.12;
     ctx.save();
     ctx.translate(s.x, s.y);
@@ -2376,9 +2522,12 @@ export class JetDriftGame {
     ctx.lineTo(-7, 7);
     ctx.stroke();
     ctx.font = '900 7px ui-monospace, monospace';
-    ctx.fillStyle = 'rgba(255,164,171,.86)';
+    ctx.fillStyle = 'rgba(255,164,171,.92)';
     ctx.textAlign = 'center';
-    ctx.fillText('LAST FAIL', 0, -21);
+    ctx.fillText('LAST FAIL · ' + (marker.category || 'COLLISION'), 0, -24);
+    ctx.font = '800 6px ui-monospace, monospace';
+    ctx.fillStyle = 'rgba(255,183,190,.76)';
+    ctx.fillText(marker.reason || '', 0, -15);
     ctx.restore();
   }
 
@@ -3085,6 +3234,7 @@ export class JetDriftGame {
 
     this.drawWorld(ctx);
     this.drawLastDeathMarker(ctx);
+    this.drawVelocityEntryGuide(ctx);
     this.drawVelocityPrediction(ctx);
 
     if (this.failTimer <= 0) {
