@@ -68,6 +68,16 @@ https://yz4git.github.io/newgame1/
 
 https://yz4git.github.io/newgame1/latest.html
 
+## v1.15 — Retry Coaching / Warp Intercept
+
+- FAIL後の最初の2回まで、原因別の短いRETRY TIPを表示
+- ASTEROID / MINE / LASER / PHASE / TIME / FUEL / LOSTごとに攻略ヒントを切り替え
+- VELOCITY ENTRYはNEXT GATE先読みと早めの切り返しを優先して案内
+- 高速でワープ口へ接近した時だけ WARP LOCK / WARP OFFSET を表示
+- MOVING WARPでは出口自身の移動速度も含めてインターセプトを推定
+- 連続クリア時の短縮ワープに3D投影・2D吸い込み・ワープアウト演出の時間軸を完全同期
+- RETRY TIPの表示時間を通常トーストより少し延長して読みやすく調整
+
 ## v1.14 — Playtest Polish / Learning Feedback
 
 - SPECIAL開始タイトルは約0.72秒で上部の小型表示へ縮退し、高速ステージの視界を早く開ける
