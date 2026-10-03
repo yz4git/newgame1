@@ -495,7 +495,8 @@ game.setToastCallback((title, subtitle = '') => {
   }
   toast.classList.add('visible');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), 1200);
+  const toastDuration = title.startsWith('RETRY TIP') ? 1550 : 1200;
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), toastDuration);
 });
 
 function playUiFeedback(type) {
