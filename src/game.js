@@ -2614,6 +2614,80 @@ export class JetDriftGame {
     ctx.restore();
   }
 
+  drawWarpInterceptCue(ctx) {
+    if (
+      !this.stageStarted ||
+      this.getNextVelocityGate() ||
+      this.failTimer > 0 ||
+      this.clearTimer > 0 ||
+      this.warpOutTimer > 0
+    ) return;
+
+    const p = this.player;
+    const speed = Math.hypot(p.vx, p.vy);
+    const dx = this.stage.portal.x - p.x;
+    const dy = this.stage.portal.y - p.y;
+    const distance = Math.hypot(dx, dy);
+    if (speed < 85 || distance > 420) return;
+
+    let targetVx = 0;
+    let targetVy = 0;
+    if (this.stage.portalMotion) {
+      const motion = this.stage.portalMotion;
+      const phase = this.stageElapsed * motion.speed + motion.phase;
+      const velocity = Math.cos(phase) * motion.amp * motion.speed;
+      targetVx = motion.axisX * velocity;
+      targetVy = motion.axisY * velocity;
+    }
+
+    const rvx = p.vx - targetVx;
+    const rvy = p.vy - targetVy;
+    const rv2 = rvx * rvx + rvy * rvy;
+    if (rv2 < 1) return;
+
+    const closingDot = dx * rvx + dy * rvy;
+    const clearRadius = this.stage.portalRadius + p.r * 0.35;
+    const dangerOffset = this.timeLeft <= 4 ? 34 : 0;
+    const y = 51 + dangerOffset;
+
+    let label = '';
+    let locked = false;
+    let tClosest = 0;
+    let miss = distance;
+
+    if (closingDot > 0) {
+      tClosest = clamp(closingDot / rv2, 0, 1.45);
+      const missX = dx - rvx * tClosest;
+      const missY = dy - rvy * tClosest;
+      miss = Math.hypot(missX, missY);
+      locked = tClosest > 0.04 && miss <= clearRadius + 10;
+      if (locked) {
+        label = 'WARP LOCK · ' + tClosest.toFixed(1) + 's';
+      } else if (tClosest > 0.05 && miss <= 120) {
+        label = 'WARP OFFSET · ' + Math.max(0, Math.round(miss - clearRadius));
+      }
+    } else if (distance < 220) {
+      label = 'WARP BEHIND · TURN EARLY';
+    }
+
+    if (!label) return;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '900 9px ui-monospace, monospace';
+    const width = Math.max(132, ctx.measureText(label).width + 22);
+    ctx.fillStyle = 'rgba(3,15,23,.78)';
+    ctx.strokeStyle = locked ? 'rgba(106,255,183,.66)' : 'rgba(255,205,117,.62)';
+    ctx.lineWidth = 1;
+    ctx.fillRect(this.width * 0.5 - width * 0.5, y - 11, width, 21);
+    ctx.strokeRect(this.width * 0.5 - width * 0.5, y - 11, width, 21);
+    ctx.fillStyle = locked ? 'rgba(183,255,220,.96)' : 'rgba(255,227,169,.94)';
+    ctx.shadowColor = locked ? '#6dffb8' : '#ffc76d';
+    ctx.shadowBlur = 8;
+    ctx.fillText(label, this.width * 0.5, y + 3);
+    ctx.restore();
+  }
+
   drawDirectionCue(ctx) {
     const nextGate = this.getNextVelocityGate();
     const targetWorld = nextGate || this.stage.portal;
@@ -3275,7 +3349,8 @@ export class JetDriftGame {
       if (this.wireframeWarpEnabled) {
         this.drawPlayer(ctx);
       } else if (this.clearTimer > 0) {
-        const t = clamp(1 - this.clearTimer / 1.0, 0, 1);
+        const duration = Math.max(0.01, this.clearDuration || 1.0);
+        const t = clamp(1 - this.clearTimer / duration, 0, 1);
         const suction = 1 - Math.pow(1 - clamp(t / 0.72, 0, 1), 3);
         const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
         const startX = this.width * 0.5;
@@ -3292,7 +3367,8 @@ export class JetDriftGame {
         this.drawPlayer(ctx);
         ctx.restore();
       } else if (this.warpOutTimer > 0) {
-        const t = clamp(1 - this.warpOutTimer / 0.72, 0, 1);
+        const duration = Math.max(0.01, this.warpOutDuration || 0.72);
+        const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
         const emerge = 1 - Math.pow(1 - t, 3);
         const cx = this.width * 0.5;
         const cy = this.height * 0.5;
@@ -3312,6 +3388,7 @@ export class JetDriftGame {
     if (this.clearTimer <= 0 && this.warpOutTimer <= 0) {
       this.drawSpecialStageAtmosphere(ctx);
       this.drawNextGateCue(ctx);
+      this.drawWarpInterceptCue(ctx);
       this.drawDirectionCue(ctx);
       this.drawMinimap(ctx);
       this.drawCrisisOverlay(ctx);
