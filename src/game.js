@@ -943,7 +943,9 @@ export class JetDriftGame {
     this.attempts = 0;
     this.failTimer = 0;
     this.clearTimer = 0;
+    this.clearDuration = 1.58;
     this.warpOutTimer = 0;
+    this.warpOutDuration = 1.24;
     this.strandedTimer = 0;
     this.globalTime = 0;
     this.hudTimer = 0;
@@ -1216,11 +1218,10 @@ export class JetDriftGame {
     this.failTimer = 0;
     this.clearTimer = 0;
     const fastWarpTransition = this.consecutiveClears >= 2;
-    this.warpOutTimer = warpOut
-      ? (this.wireframeWarpEnabled
-        ? (fastWarpTransition ? 0.92 : 1.24)
-        : (fastWarpTransition ? 0.52 : 0.72))
-      : 0;
+    this.warpOutDuration = this.wireframeWarpEnabled
+      ? (fastWarpTransition ? 0.92 : 1.24)
+      : (fastWarpTransition ? 0.52 : 0.72);
+    this.warpOutTimer = warpOut ? this.warpOutDuration : 0;
     this.strandedTimer = 0;
     this.timeWarned = false;
     this.timeCriticalWarned = false;
@@ -1244,6 +1245,13 @@ export class JetDriftGame {
         'SECTOR ' + String(this.stage.sectorIndex).padStart(2, '0') + ' · ' + this.stage.sectorStage + '/' + this.stage.sectorLength + special,
         this.stage.title + ' · ' + this.stage.hint,
       );
+    } else if (
+      this.lastDeathMarker?.stageIndex === index &&
+      this.stageAttempt > 0 &&
+      this.stageAttempt <= 2
+    ) {
+      const retryHint = this.getRetryHint(this.lastDeathMarker.reason);
+      if (retryHint) this.onToast('RETRY TIP · ' + (this.lastDeathMarker.category || 'FAIL'), retryHint);
     }
     this.onChange('stage', this.getSnapshot());
   }
@@ -1318,6 +1326,19 @@ export class JetDriftGame {
     };
   }
 
+  getRetryHint(reason) {
+    if (this.stage.specialType === 'VELOCITY_ENTRY') {
+      return 'NEXT GATEを先読み。大きく切り返さず、早めに向きを作る';
+    }
+    if (reason === 'TIME OUT') return '序盤で速度を作り、後半は小さい修正だけで出口へ流す';
+    if (reason === 'OUT OF FUEL') return 'JETを短く使って速度を作り、離して慣性で進む';
+    if (reason === 'LOST IN SPACE') return '出口矢印とミニマップを基準に、早めに中心側へ戻す';
+    if (reason === 'LASER' || reason === 'PHASE GATE') return '周期を一拍見て、安全時間帯へまとめて飛び込む';
+    if (reason === 'MINE') return '機雷の移動先を狙わず、通過後の空間へラインを置く';
+    if (reason === 'ASTEROID') return '直前で曲げすぎず、少し手前から通過ラインを作る';
+    return '';
+  }
+
   triggerFail(reason) {
     if (this.state !== 'playing' || this.failTimer > 0 || this.clearTimer > 0) return;
     this.recordTrailPoint(true);
@@ -1372,9 +1393,10 @@ export class JetDriftGame {
     this.score += bonus;
     this.consecutiveClears += 1;
     const fastClearTransition = this.consecutiveClears >= 2;
-    this.clearTimer = this.wireframeWarpEnabled
+    this.clearDuration = this.wireframeWarpEnabled
       ? (fastClearTransition ? 1.18 : 1.58)
       : (fastClearTransition ? 0.74 : 1.00);
+    this.clearTimer = this.clearDuration;
     this.thrusting = false;
     this.audio.warp();
     this.onFx('clear');
@@ -1701,14 +1723,14 @@ export class JetDriftGame {
     if (!this.wireframeWarpEnabled) return null;
 
     if (this.clearTimer > 0) {
-      const duration = 1.58;
+      const duration = Math.max(0.01, this.clearDuration || (this.wireframeWarpEnabled ? 1.58 : 1.0));
       const t = clamp(1 - this.clearTimer / duration, 0, 1);
       const mix = this.smoothWarp(clamp((t - 0.02) / 0.48, 0, 1));
       return { active: true, mix, t, phase: 'in' };
     }
 
     if (this.warpOutTimer > 0) {
-      const duration = 1.24;
+      const duration = Math.max(0.01, this.warpOutDuration || (this.wireframeWarpEnabled ? 1.24 : 0.72));
       const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
       const mix = 1 - this.smoothWarp(clamp((t - 0.40) / 0.56, 0, 1));
       return { active: true, mix, t, phase: 'out' };
@@ -2202,7 +2224,7 @@ export class JetDriftGame {
   drawLineRating(ctx) {
     if (!this.lastLineRating || this.clearTimer <= 0) return;
     const r = this.lastLineRating;
-    const duration = this.wireframeWarpEnabled ? 1.58 : 1.0;
+    const duration = Math.max(0.01, this.clearDuration || (this.wireframeWarpEnabled ? 1.58 : 1.0));
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const alpha = clamp(Math.min(t * 5, (1 - t) * 6 + 0.25), 0, 1);
     ctx.save();
@@ -2934,12 +2956,12 @@ export class JetDriftGame {
   drawWarpEffect(ctx) {
     if (this.clearTimer <= 0) return;
     if (this.wireframeWarpEnabled) {
-      const duration = 1.58;
+      const duration = Math.max(0.01, this.clearDuration || 1.58);
       const t = clamp(1 - this.clearTimer / duration, 0, 1);
       this.drawProjectedWarpFlash(ctx, t, false);
       return;
     }
-    const duration = 1.0;
+    const duration = Math.max(0.01, this.clearDuration || 1.0);
     const t = clamp(1 - this.clearTimer / duration, 0, 1);
     const portal = this.worldToScreen(this.stage.portal.x, this.stage.portal.y);
     const cx = portal.x;
@@ -3003,12 +3025,12 @@ export class JetDriftGame {
   drawWarpOutEffect(ctx) {
     if (this.warpOutTimer <= 0) return;
     if (this.wireframeWarpEnabled) {
-      const duration = 1.24;
+      const duration = Math.max(0.01, this.warpOutDuration || 1.24);
       const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
       this.drawProjectedWarpFlash(ctx, t, true);
       return;
     }
-    const duration = 0.72;
+    const duration = Math.max(0.01, this.warpOutDuration || 0.72);
     const t = clamp(1 - this.warpOutTimer / duration, 0, 1);
     const cx = this.width * 0.5;
     const cy = this.height * 0.5;
